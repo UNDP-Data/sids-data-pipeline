@@ -204,13 +204,14 @@ async def folder2azureblob(container_client_instance=None, src_folder=None, dst_
                             overwrite=False, max_concurrency=8, timeout=None
                            ):
     """
-    Async upload a local folder (including its content) to Azure blob container
+    Asynchronously upload a local folder (including its content) to Azure blob container
 
     :param container_client_instance: instance of azure.storage.blob.aio.ContainerClient
     :param src_folder: str, full abs path to the folder to be uploaded
     :param dst_blob_name: str the name of the blob where the content fo the folder will be downloaded
     :param overwrite: bool, defaults to false, sepcifiy if an existing blob will be overwritten
     :param max_concurrency: int, maximum number of parallel connections to use when the blob size exceeds 64MB
+    :param timeout, timeout in seconds to be applied to uploading all files in the folder.
     :return:
     """
     assert src_folder not in [None, '', '/' ], f'src_folder={src_folder} is invalid'
@@ -258,8 +259,24 @@ async def folder2azureblob(container_client_instance=None, src_folder=None, dst_
 
 
 async def download_folder_from_azure(container_client_instance=None, src_blob_name=None, dst_folder=None, timeout=None):
+    """
+    Asynchronously download
+    :param container_client_instance: instance of azure.storage.blob.aio.ContainerClient
+    :param src_blob_name: str, the name of the blob/folder to download
+    :param dst_folder: str, full absolute path to the folder where the folder/blob will be downloaded
+    :param timeout, timeout in seconds to be applied to downloading all files in the folder.
+    :return:
+    """
+
+    assert dst_folder not in [None, '', '/'], f'dst_folder={dst_folder} is invalid'
+    assert os.path.exists(dst_folder), f'dst_folder={dst_folder} does not exist'
+    assert os.path.isabs(dst_folder), f'dst_folder={dst_folder} is not a an absolute path'
+    assert os.path.isdir(dst_folder), f'dst_folder={dst_folder} is not a directory'
+    assert len(dst_folder) > 1, f'dst_folder={dst_folder} is invalid'
+
 
     ftrs = list()
+
     try:
         async with container_client_instance:
             blob_iter =  container_client_instance.list_blobs(name_starts_with=src_blob_name)
@@ -318,7 +335,7 @@ if __name__ == '__main__':
     asyncio.run(example_run(sas_url=write_sas_url))
 
 
-    #examples hot to run in an explicit style (less elegant more direct
+    #examples hot to run using a functional interface
 
     #cc = get_container_client(sas_url=write_sas_url)
     #asyncio.run(localfile2azureblob(container_client_instance=cc, src=local_file, overwrite=True))
