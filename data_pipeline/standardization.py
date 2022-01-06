@@ -87,6 +87,7 @@ def standardize(dst_folder=None,  attribute_raw_file=None) -> None:
     gdrive_dowload_url = f'https://drive.google.com/uc?export=download'
     print(f'{gdrive_dowload_url}&id={id}')
     with requests.get(gdrive_dowload_url, params= {'id':id}, stream=True) as resp:
+
         lines = (line.decode('utf-8') for line in resp.iter_lines())
         reader = csv.DictReader(lines)
         for row in reader:
