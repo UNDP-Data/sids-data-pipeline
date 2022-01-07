@@ -3,6 +3,8 @@ from urllib.parse import urlparse
 import logging
 import os
 import time
+import asyncio
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,13 +70,46 @@ class HandyContainerClient():
     def __init__(self, sas_url=None):
         assert sas_url is not None, f'sas_url is required to upload/download data from AZ blob container'
         self.sas_url = sas_url
-        self.cclient = ContainerClient.from_container_url(sas_url)
+        self.cclient = ContainerClient.from_container_url(self.sas_url)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        asyncio.run(self.cclient.close())
 
     async def __aenter__(self):
-        return self.cclient
+        return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return await self.cclient.close()
+        await self.cclient.close()
+
+
+
+    async def list_blobs_async(self, name=None):
+        """
+        Lists blobs whose name start with name
+        :param name: str
+        :return:
+        """
+
+        async for blob in self.cclient.list_blobs(name_starts_with=name):
+            yield blob
+
+
+    async def async2sync(self, name=None):
+        return [item async for item in self.list_blobs_async(name=name)]
+
+
+    def listblobs(self, name=None):
+        """
+        Lists blobs whose name start with name
+        :param name: str
+        :return:
+        """
+
+        yield from asyncio.run(self.async2sync(name=name))
+
 
 
 async def localfile2azureblob(container_client_instance=None, src=None, dst_blob_name=None,  overwrite=False, max_concurrency=8):
