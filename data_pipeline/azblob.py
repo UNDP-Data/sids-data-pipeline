@@ -64,8 +64,23 @@ def get_container_client(sas_url=None):
         logger.error(f'failed to create an azure.storage.blob.ContainerClient object from {sas_url}')
         raise
 
-
 class HandyContainerClient():
+
+    def __init__(self, sas_url=None):
+        assert sas_url is not None, f'sas_url is required to upload/download data from AZ blob container'
+        self.sas_url = sas_url
+        self.cclient = ContainerClient.from_container_url(self.sas_url)
+
+    async def __aenter__(self):
+        return self.cclient
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.cclient.close()
+
+
+
+
+class FancyContainerClient():
 
     def __init__(self, sas_url=None):
         assert sas_url is not None, f'sas_url is required to upload/download data from AZ blob container'
@@ -223,7 +238,7 @@ async def download_file(container_client_instance=None, blob_name=None, dst_file
     """
     assert dst_file not in [None, ''], f'invalid destination file {dst_file}'
     assert  os.path.isabs(dst_file), 'dst_file must be an absolute path'
-    
+    logger.info(f'Going to download {dst_file} from {blob_name}')
     with open(dst_file, 'wb') as dstf:
         stream = await container_client_instance.download_blob(blob_name)
         await stream.readinto(dstf)
@@ -293,13 +308,16 @@ async def folder2azureblob(container_client_instance=None, src_folder=None, dst_
 
 
 
-async def download_folder_from_azure(container_client_instance=None, src_blob_name=None, dst_folder=None, timeout=None):
+async def download_folder_from_azure(container_client_instance=None, src_blob_name=None, dst_folder=None, timeout=None,
+                                     strip_path=False):
     """
     Asynchronously download
     :param container_client_instance: instance of azure.storage.blob.aio.ContainerClient
     :param src_blob_name: str, the name of the blob/folder to download
     :param dst_folder: str, full absolute path to the folder where the folder/blob will be downloaded
     :param timeout, timeout in seconds to be applied to downloading all files in the folder.
+    :param: strip_path, defaults to False, if True the files from thne src blob name will be
+            saved without their relative path from Azure in thier name, that is directly into the dst_folder
     :return:
     """
 
@@ -314,10 +332,17 @@ async def download_folder_from_azure(container_client_instance=None, src_blob_na
 
     try:
         async with container_client_instance:
+
             blob_iter =  container_client_instance.list_blobs(name_starts_with=src_blob_name)
             async for blob in blob_iter:
-                dst_file = os.path.join(dst_folder, blob.name)
+                if not strip_path:
+                    dst_file = os.path.join(dst_folder, blob.name)
+                else:
+                    dst_file = os.path.join(dst_folder, os.path.split(blob.name)[-1])
                 mkdir_recursive(os.path.dirname(dst_file))
+                if os.path.exists(dst_file) and blob.size == os.path.getsize(dst_file):
+                    logger.info(f'Skipping {blob.name} because it already exists as {dst_file}')
+                    continue
                 fut = asyncio.ensure_future(
                     download_file(container_client_instance=container_client_instance,
                                   blob_name=blob.name,
@@ -351,23 +376,26 @@ if __name__ == '__main__':
     logging.basicConfig()
     logger.setLevel('INFO')
     write_sas_url = 'https://undpngddlsgeohubdev01.blob.core.windows.net/test?sp=racwdl&st=2022-01-05T20:59:44Z&se=2023-01-06T04:59:44Z&spr=https&sv=2020-08-04&sr=c&sig=MkEoynTO0ftlLH95zq%2BXgjWl1%2F8um9OiYo1hpd6ufwE%3D'
+    sas_url = 'https://undpngddlsgeohubdev01.blob.core.windows.net/sids?sp=racwdl&st=2022-01-06T21:09:27Z&se=2032-01-07T05:09:27Z&spr=https&sv=2020-08-04&sr=c&sig=XtcP1UUnboo7gSVHOXeTbUt0g%2FSV2pxG7JVgmZ8siwo%3D'
     remote_file = 'https://drive.google.com/uc?export=download&id=1_kL7Iq4yFus4DKbgbsw6yUjMKn7QsB7o'
     remote_file = 'https://popp.undp.org/UNDP_POPP_DOCUMENT_LIBRARY/Public/HR_Non-Staff_International%20Personnel%20Services%20Agreement_IPSA.docx#:~:text=The%20International%20Personnel%20Services%20Agreement,under%20a%20services%2Dbased%20contract.&text=Such%20contracts%20are%20then%20administered%20by%20UNDP.'
     local_file = '/data/sids/attribute_list_raw.csv'
     local_file = '/data/undp/zambia/zambia_energyaccess_poverty.csv'
 
     local_folder = '/data/undp/enmap/hrea/zarr/a/2'
-    local_folder_cp = '/data/undp/enmap/hrea/'
+    local_folder_cp = '/data/sids/'
 
 
     #example how to run using the class context wrapper
 
     async def example_run(sas_url=None):
         async with HandyContainerClient(sas_url=sas_url) as cc:
-            await download_folder_from_azure(container_client_instance=cc, dst_folder=local_folder_cp, src_blob_name='ttt')
+            await download_folder_from_azure(container_client_instance=cc, dst_folder=local_folder_cp,
+                                             src_blob_name='rawdata/Raw GIS Data/Atlas/Data/ocean/gebco_2020_geotiff',
+                                             strip_path=True)
 
 
-    asyncio.run(example_run(sas_url=write_sas_url))
+    asyncio.run(example_run(sas_url=sas_url))
 
 
     #examples hot to run using a functional interface
