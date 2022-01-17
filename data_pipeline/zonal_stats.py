@@ -1,9 +1,8 @@
 from pygeoprocessing import geoprocessing as gp
-import io
+
 import os
-import shapefile
-from osgeo import gdal, ogr, gdalconst, osr
-import json
+
+from osgeo import gdal, ogr
 import logging
 import tempfile
 import collections
@@ -31,138 +30,6 @@ def mode(a, axis=0):
         oldmostfreq = mostfrequent
 
     return np.asarray([mostfrequent], dtype=in_dtype).item()
-
-def fetch_az_shapefile(blob_path=None, client_container=None, alternative_path=None):
-    """
-    Download a shapefile from an azure blob path
-    :param blob_path: str, relativre path to a .shp file
-    :param client_container, instance of instance of azure.storage.blob.ContainerClient
-    :param alternative_path, str, a local dir, if provided the vector will be writen there as shp
-           and subsequently read from there instead of going to AZ blob
-           use for devel
-    :return: a v2 GDAl/OGR Dataset with one layer representing the shapefile
-
-    NB; the function will fetch/download the '.shp', '.shx', '.dbf', '.prj'
-    files ands uses the pyshp (shapefile) lib to read the data because i could not find
-    a  decent way in to read shapefiles from azure blob using GDAL/OGR directly.
-    Instead a shapefile.Reader is created from Bytesio objects and this is exported
-    to geoJSON using the __geo_interface__
-
-
-    """
-    blob_name = os.path.split(blob_path)[-1]
-
-    if alternative_path is not None:
-        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
-        dst_shp_path = os.path.join(alternative_path, blob_name)
-        if os.path.exists(dst_shp_path):
-            logger.info(f'Reading {blob_path} from {alternative_path}')
-            return gdal.OpenEx(dst_shp_path, gdalconst.OF_VECTOR|gdalconst.OF_READONLY)
-            #return ogr.Open(dst_shp_path, gdal.OF_VECTOR|gdal.OF_READONLY)
-
-    logger.info(f'Fetching {blob_path} from {client_container.container_name} container')
-
-    root = os.path.splitext(blob_path)[0]
-    args = dict()
-
-    # make a sync container client
-
-    for e in ('.shp', '.shx', '.dbf', '.prj' ):
-
-        pth = f'{root}{e}'
-        # fetch a stream
-        rast_cfg_stream = client_container.download_blob(pth)
-        # push the binary stream into RAM
-        m = io.BytesIO()
-        rast_cfg_stream.readinto(m)
-        # need to position at the beginning
-        m.seek(0)
-        args[e[1:]] = m
-
-    with shapefile.Reader(**args) as sr:
-        #TODO think of a better way
-        vds = gdal.OpenEx(json.dumps(sr.shapeRecords().__geo_interface__), gdalconst.OF_VECTOR|gdalconst.OF_READONLY)
-        # save to shp in case this the alternative_path arg was provided
-        if alternative_path is not None:
-            assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
-            logger.info(f'Creating {dst_shp_path}')
-            dst_shp_path = os.path.join(alternative_path,blob_name)
-            new_ds = gdal.VectorTranslate(destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=blob_name)
-            new_ds = None
-            #close the in mem sources
-            for k, v in args.items():
-                v.close()
-
-        return vds
-
-
-
-
-def fetch_az_shapefile_direct(blob_path=None, client_container=None, alternative_path=None):
-    """
-    Download a shapefile from an azure blob path
-    :param blob_path: str, relativre path to a .shp file
-    :param client_container, instance of instance of azure.storage.blob.ContainerClient
-    :param alternative_path, str, a local dir, if provided the vector will be writen there as shp
-           and subsequently read from there instead of going to AZ blob
-           use for devel
-    :return: a v2 GDAl/OGR Dataset with one layer representing the shapefile
-
-    NB; the function will fetch/download the '.shp', '.shx', '.dbf', '.prj'
-    files and sore the stream into vsi virtual files
-
-
-    """
-    blob_name = os.path.split(blob_path)[-1]
-
-
-
-
-    #gdal.SetConfigOption('SHAPE_RESTORE_SHX','YES')
-    if alternative_path is not None:
-        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
-        dst_shp_path = os.path.join(alternative_path, blob_name)
-        if os.path.exists(dst_shp_path):
-            logger.info(f'Reading {blob_path} from {alternative_path}')
-            return gdal.OpenEx(dst_shp_path, gdalconst.OF_VECTOR|gdalconst.OF_READONLY)
-            #return ogr.Open(dst_shp_path, gdal.OF_VECTOR|gdal.OF_READONLY)
-
-    logger.info(f'Fetching {blob_path} from {client_container.container_name} container')
-    name = os.path.split(blob_path)[-1]
-    root = os.path.splitext(blob_path)[0]
-    rroot, ext = os.path.splitext(name)
-    read_path = f'/vsimem/{rroot}{ext}'
-
-
-    for e in ('.shp', '.shx', '.dbf'):
-        vsi_pth = f'/vsimem/{rroot}{e}'
-        remote_pth  = f'{root}{e}'
-        strm  = client_container.download_blob(remote_pth)
-        v = strm.readall()
-        gdal.FileFromMemBuffer(vsi_pth, v)
-
-    # fect projection
-    prj_file = f'{root}.prj'
-    sr = osr.SpatialReference()
-    sr.ImportFromWkt(client_container.download_blob(prj_file).readall().decode('utf-8'))
-    #vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR|gdalconst.OF_UPDATE )
-    vds = gdal.OpenEx(read_path, 1)
-    #gdal.Dataset.CopyLayer()
-    l = vds.GetLayer(0)
-    nl = vds.CopyLayer(l, 'a', dst_srswkt=sr.ExportToWkt() )
-
-
-    vds.SetProjection(sr.ExportToWkt())
-    #del vds
-
-    if alternative_path is not None:
-        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
-        logger.info(f'Creating {dst_shp_path}')
-        dst_shp_path = os.path.join(alternative_path, blob_name)
-        new_ds = gdal.VectorTranslate(destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=blob_name)
-        new_ds = None
-    return vds
-
 
 
 def zonal_statistics(
@@ -232,6 +99,7 @@ def zonal_statistics(
         raise ValueError(
             "`base_raster_path_band` not formatted as expected.  Expects "
             "(path, band_index), received %s" % repr(base_raster_path_band))
+
     aggregate_vector = gdal.OpenEx(aggregate_vector_path, gdal.OF_VECTOR)
     if aggregate_vector is None:
         raise RuntimeError(
@@ -429,7 +297,7 @@ def zonal_statistics(
                         np.mean(masked_clipped_block),
                         aggregate_stats[agg_fid]['mean']
                      )
-                )
+                ).item()
                 aggregate_stats[agg_fid]['mode'] += mode(
                     (
                         np.asarray((mode(masked_clipped_block), aggregate_stats[agg_fid]['mode']),
@@ -520,7 +388,7 @@ def zonal_statistics(
             # aggregate_stats[unset_fid]['sum'] = np.sum(
             #     valid_unset_fid_block)
             aggregate_stats[unset_fid]['mean'] = np.mean(
-                valid_unset_fid_block)
+                valid_unset_fid_block).item()
             aggregate_stats[unset_fid]['mode'] = mode(
                 valid_unset_fid_block)
 
@@ -552,7 +420,8 @@ def zonal_statistics(
     aggregate_vector = None
 
     shutil.rmtree(temp_working_dir)
-    return dict(aggregate_stats)
+    v = dict(aggregate_stats)
+    return {int(k): v for (k, v) in v.items()}
 
 
 
@@ -571,7 +440,7 @@ def zonal_stats(raster_path_or_ds=None, vector_path_or_ds=None, band=None,
         raster_path = raster_path_or_ds
 
     if 'DataSource' in vector_path_or_ds.__class__.__name__ or 'Dataset' in vector_path_or_ds.__class__.__name__  :
-        #_, vector_file_name = os.path.split(vector_path_or_ds.GetFileList()[0])
+        #, vector_file_name = os.path.split(vector_path_or_ds.GetFileList()[0])
         vector_path = f'/vsimem/{vector_path_or_ds.GetLayer(0).GetName()}'
         gdal.VectorTranslate(destNameOrDestDS=vector_path,srcDS=vector_path_or_ds)
 

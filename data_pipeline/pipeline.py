@@ -10,9 +10,10 @@ from osgeo import gdal, ogr, osr
 import json
 from dotenv import load_dotenv
 from azure.storage.blob import ContainerClient
-from data_pipeline.zonal_stats import fetch_az_shapefile, fetch_az_shapefile_direct
+from data_pipeline import util
 from data_pipeline.zonal_stats import zonal_stats
-
+import shutil
+from data_pipeline.util import scantree
 gdal.UseExceptions()
 
 load_dotenv()
@@ -37,20 +38,25 @@ def get_csv_cfgs(sas_url=None, cfg_blob_path=None, sync=False):
 def store_stats(src_ds=None, stats_dict = None, stat_func='mean', field_name=None):
     """
     Store the zonal stat results located in stat_dict  in the first layer of the src_ds.
-    :param src_ds: ogr.DataSource, instance
+    :param src_vect_path: str, path to vect dataset
     :param stats_dict: dict representing  the results of computing func_name
                         inside the polygons of the first layer within the raster with id equal to first layer name
     :param stat_func: str, default=mean
     :return:
     """
+
     layer = src_ds.GetLayer(0)
-    print(src_ds.GetFileList())
-    drv = src_ds.GetDriver()
-    print(drv.LongName, layer)
     ldef = layer.GetLayerDefn()
 
     field_names = [ldef.GetFieldDefn(i).GetName() for i in range(ldef.GetFieldCount())]
+    flist = [e for e in src_ds.GetFileList() if ".shp" in e]
+    if flist:
+        fn = f'to {flist[0]}'
+    else:
+        fn = ''
+
     if not field_name in field_names:
+        logger.info(f'Adding field {field_name} {fn}')
         stat_field = ogr.FieldDefn(field_name, ogr.OFTReal)
         stat_field.SetWidth(15)
         stat_field.SetPrecision(2)
@@ -59,7 +65,7 @@ def store_stats(src_ds=None, stats_dict = None, stat_func='mean', field_name=Non
 
     layer.StartTransaction()
     #TODO remove next line 100%
-    sd = {int(k):v for (k,v) in stats_dict.items()}
+    sd = {int(k): v for (k, v) in stats_dict.items()}
 
     for feat in layer:
         fid = feat.GetFID()
@@ -67,10 +73,13 @@ def store_stats(src_ds=None, stats_dict = None, stat_func='mean', field_name=Non
             v = sd[fid][stat_func]
             feat.SetField(field_name, v )
             layer.SetFeature(feat)
-        except Exception:
-            logger.warning(f'No {field_name} value was assigned to feature {fid} ')
+        except Exception as e:
+            logger.warning(f'No {field_name} value was assigned to feature {fid} {e} ')
 
     layer.CommitTransaction()
+    layer.ResetReading()
+    layer = None
+
 
 
 
@@ -81,15 +90,26 @@ def store_stats(src_ds=None, stats_dict = None, stat_func='mean', field_name=Non
 
 def run(raster_layers_csv_blob=None, vector_layers_csv_blob=None,
         sas_url=None,
-        store_attrs_per_vector=False,
-        alternative_path=None,
-        vector_format='MVT'):
-    supported_formats = 'ESRI Shapefile', 'MVT'
-    assert vector_format in supported_formats, f'Invalid format={format()}. Valid options are {",".join(supported_formats)}'
-    ext = '.shp' if 'ESRI' in vector_format else '.pbf'
+        store_attrs_per_vector=True,
+        out_vector_path=None,
+        vector_format={'ESRI Shapefile':'.shp'},
+        dst_srs=3857
+        ):
+
+    assert out_vector_path not in ('', None), f'Invalid out_vector_path={out_vector_path}'
+
+    assert  vector_format, f'Invalid vector_format={vector_format}. Valid options are {util.SUPPORTED_FORMATS} '
+
+    vformat, ext = next(iter(vector_format.items()))
+
+    assert vformat  in util.SUPPORTED_FORMATS, f'Invalid format={vector_format}. Valid options are {util.SUPPORTED_FORMATS}'
+
+    per = 'vector' if store_attrs_per_vector else 'raster'
+
+    logger.info(f'Going to store vector tiles per {per}')
 
     wmercP = osr.SpatialReference()
-    wmercP.ImportFromEPSG(3857)
+    wmercP.ImportFromEPSG(dst_srs)
 
     # make a sync container client
     with ContainerClient.from_container_url(container_url=sas_url) as c:
@@ -117,8 +137,21 @@ def run(raster_layers_csv_blob=None, vector_layers_csv_blob=None,
 
                 # src_vector_blob_path = os.path.join('/vsiaz/sids/rawdata', vpath, vfile_name)
                 src_vector_blob_path = os.path.join('rawdata', vpath.replace('Shapefile', 'Shapefiles'), vfile_name)
-                vds = fetch_az_shapefile_direct(blob_path=src_vector_blob_path, client_container=c, alternative_path=None)
-                vector_datasets[vid] = vds
+
+                if out_vector_path not in ('', None):
+                    vect_path = os.path.join(out_vector_path, 'in')
+                else:
+                    vect_path = f'/vsimem/{vfile_name}'
+
+                #TODO do not forget to set vecpath ot vsimem
+
+                vds, prj = util.fetch_az_shapefile(  blob_path=src_vector_blob_path,
+                                                client_container=c,
+                                                alternative_path='/data/sids/tmp/test/in')
+
+                #print_field_names(vds,'aaa')
+                vector_datasets[vid] = vds, prj
+
                 break
 
         nrp = 0
@@ -149,117 +182,157 @@ def run(raster_layers_csv_blob=None, vector_layers_csv_blob=None,
 
                 src_raster_blob_path = os.path.join('/vsiaz/sids/', rpath, rfile_name)
                 logger.debug(f'Processing {src_raster_blob_path}')
-                # stanndardize
-                stdz_ds = standardize(src_blob_path=src_raster_blob_path,band=band, alternative_path=alternative_path)
+                # standardize
+                #TODO remove alternative_path
+                stdz_ds = standardize(src_blob_path=src_raster_blob_path,band=band, alternative_path='/data/sids/tmp/test')
                 #iterate over vectors and
-                for vds_id, vds in vector_datasets.items():
-                    #print(vds_id, vds, vds.GetFileList())
-                    srf = os.path.join(alternative_path, f'{rid}_st.json')
+                for vds_id, t in vector_datasets.items():
+                    vds, src_prj = t
+
+                    srf = os.path.join('/data/sids/tmp/test', f'{rid}_st.json')
 
                     if not os.path.exists(srf) or os.path.getsize(srf) == 0:
 
                         stat_result = zonal_stats(raster_path_or_ds=stdz_ds, vector_path_or_ds=vds, band=band)
                         with open(srf, 'w') as out:
-                            json.dump({int(k):v for (k, v) in stat_result.items()}, out)
+                            json.dump(stat_result, out)
 
                     else:
                         with open(srf) as infl:
                             stat_result = json.load(infl)
 
 
+                    lname = rid
+
+
                     if store_attrs_per_vector:
-                        web_merc_vect_path = f'/vsimem/{vds_id}{ext}'
-                        web_merc_vect_path = f'{os.path.join(alternative_path,vds_id)}{ext}'
-                        web_merc_vect_path = f'/vsimem/{vds_id}{ext}'
-                        lname = vds_id
-                        access_mode = 'append'
+                        logger.debug(f'Storing attrs per vector')
+                        web_merc_vect_path = f'{os.path.join("/vsimem", vds_id)}{ext}'
+
+                        try:
+                            logger.info(f'Attempting to open {web_merc_vect_path}')
+                            web_merc_ds =  gdal.OpenEx(web_merc_vect_path, gdal.OF_UPDATE|gdal.OF_VECTOR)
+
+                        except Exception as e:
+                            logger.info(f'Creating layer {lname} in {web_merc_vect_path}')
+
+                            opts = gdal.VectorTranslateOptions(format=vformat,
+                                                               dstSRS=wmercP.ExportToWkt(),
+                                                               srcSRS=src_prj.ExportToWkt(),
+                                                               reproject=True,
+                                                               addFields=True,
+                                                               # datasetCreationOptions=[],
+                                                               # layerCreationOptions=['COORDINATE_PRECISION=5',
+                                                               #                       'RFC7946=YES'],
+                                                               layerName=lname,
+                                                               skipFailures=True,
+                                                               )
+                            flist = [e for e in vds.GetFileList() if ".shp" in e]
+                            if flist:
+                                fn = flist[0]
+                                logger.info(f'Reprojecting {fn} to {web_merc_vect_path}')
+                            # reproject
+                            web_merc_ds = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path, srcDS=vds,
+                                                               options=opts)
+
+                        store_stats(src_ds=web_merc_ds, stats_dict=stat_result, field_name=rid)
 
                     else:
-                        web_merc_vect_path = f'/vsimem/{rid}{ext}'
-                        web_merc_vect_path = f'{os.path.join(alternative_path,rid)}{ext}'
-                        web_merc_vect_path = f'/vsimem/{rid}{ext}'
-                        lname = rid
-                        access_mode = None
-                    try:
-                        web_merc_ds = gdal.OpenEx(web_merc_vect_path, gdal.OF_UPDATE)
+                        logger.debug('Storing attrs per raster')
+                        web_merc_vect_path_json = f'{os.path.join(out_vector_path or "/vsimem", rid, vds_id)}.json'
+                        web_merc_vect_path = f'{os.path.join("/vsimem", rid, vds_id)}{ext}'
 
+                        basedir = os.path.dirname(web_merc_vect_path_json)
+                        if not os.path.exists(basedir):
+                            util.mkdir_recursive(basedir)
+                        try:
 
-                    except Exception as e:
+                            src_ds =  gdal.OpenEx(web_merc_vect_path, gdal.OF_UPDATE|gdal.OF_VECTOR)
+                            driver = src_ds.GetDriver()
+                            driver.Delete(web_merc_vect_path)
+                            src_ds = None
+                            logger.info(f'Removed {web_merc_vect_path}')
+                        except Exception as e:
+
+                            pass
+
                         logger.info(f'Creating layer {lname} in {web_merc_vect_path}')
-                        opts = gdal.VectorTranslateOptions(format=vector_format,
-                                                           accessMode='overwrite',
-                                                           dstSRS=wmercP,
+
+                        opts = gdal.VectorTranslateOptions(format=vformat,
+                                                           dstSRS=wmercP.ExportToWkt(),
+                                                           srcSRS=src_prj.ExportToWkt(),
                                                            reproject=True,
                                                            addFields=True,
                                                            # datasetCreationOptions=[],
-                                                           # layerCreationOptions=['SPATIAL_INDEX=YES'],
-                                                           #layerName=lname
+                                                           # layerCreationOptions=['COORDINATE_PRECISION=5',
+                                                           #                       'RFC7946=YES'],
+                                                           layerName=lname,
+                                                           skipFailures=True,
                                                            )
-
-                        web_merc_ds = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path, srcDS=vds, options=opts)
-
-                    print(type(vds), vds.GetSpatialRef().ExportToProj4())
-                    print_field_names(web_merc_ds, 'test')
-                    # if not os.path.exists(web_merc_vect_path):
-                    #     logger.info(f'Creating layer {lname} in {web_merc_vect_path}')
-                    #     opts = gdal.VectorTranslateOptions(format=vector_format,
-                    #                                        accessMode='overwrite',
-                    #                                        dstSRS=wmercP,
-                    #                                        reproject=True,
-                    #                                        addFields=True,
-                    #                                        #datasetCreationOptions=[],
-                    #                                        #layerCreationOptions=['SPATIAL_INDEX=YES'],
-                    #                                        layerName=lname
-                    #                                        )
-                    #
-                    #     web_merc_ds = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path, srcDS=vds,options=opts)
-                    # else:
-                    #     web_merc_ds = gdal.OpenEx(web_merc_vect_path, gdal.OF_UPDATE)
-
-                    #print(web_merc_ds.GetLayerCount(), web_merc_ds.GetLayer(0).GetName(), web_merc_ds.GetLayer(0).GetFeatureCount())
-                    #print(web_merc_ds.GetFileList())
-                    # if not store_attrs_per_vector:
-                    #     mvt_opts = gdal.VectorTranslateOptions( for
-                    #
-                    #     )
-                    #     web_merc_mvt = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path, srcDS=vds,options=opts)
-
-
-                    store_stats(src_ds=web_merc_ds, stats_dict=stat_result, field_name=rid )
-                    print_field_names(web_merc_ds, lname)
-                    nrp+=1
+                        logger.info(f'Reprojecting {vds.GetFileList()} to {web_merc_vect_path}')
+                        # reproject
+                        web_merc_ds = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path, srcDS=vds,
+                                                           options=opts)
 
 
 
-                    #web_merc_ds = None
+
+                        store_stats(src_ds=web_merc_ds, stats_dict=stat_result, field_name=rid )
+                        web_merc_ds_json = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path_json, srcDS=web_merc_ds,
+                                                            format='GeoJSON'
+                                                           )
+                        web_merc_ds_json = None
+                        web_merc_ds = None
+
+                nrp+=1
+
+
+                logger.info(f'Finished processing raster no:{nrp}')
                 if nrp == 3:
 
                     break
 
-        for vds_id, vds in vector_datasets.items():
-            fpl = vds.GetFileList()
-            vds = None
-            if fpl:
-                for fp in fpl:
-                    logger.info(f'Unlinking {fp}')
-                    gdal.Unlink(fp)
+        for vds_id, t in vector_datasets.items():
+            vds, prj = t
+            web_merc_vect_path = f'{os.path.join("/vsimem", vds_id)}{ext}'
+            web_merc_vect_path_json = f'{os.path.join(out_vector_path, vds_id)}.json'
+            basedir = os.path.dirname(web_merc_vect_path_json)
+            if not os.path.exists(basedir):
+                util.mkdir_recursive(basedir)
+            web_merc_ds_json = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path_json, srcDS=web_merc_vect_path,
+                                                format='GeoJSON'
+                                                )
+
+            web_merc_ds_json = None
+
+
+            if vds:
+                fpl = vds.GetFileList()
+                vds = None
+                prj = None
+                if fpl:
+                    for fp in fpl:
+                        if 'vsimem' in fp:
+                            logger.info(f'Unlinking {fp}')
+                            gdal.Unlink(fp)
 
 
 def print_field_names(src_ds, aname):
     layer = src_ds.GetLayer(0)
     ldef = layer.GetLayerDefn()
-
+    layer.ResetReading()
     field_names = [ldef.GetFieldDefn(i).GetName() for i in range(ldef.GetFieldCount())]
     fpath = src_ds.GetFileList()
     if not fpath:
         fpath = 'NA'
     else:
         fpath = fpath[0]
-
+    logger.info(f'{src_ds} features {src_ds.GetDriver().LongName} format')
     logger.info(
         f'Layer {layer.GetName()} from {fpath} has {layer.GetFeatureCount()}'
         f' features and {",".join(field_names)} in {aname}'
     )
+
 
 
 
@@ -303,7 +376,7 @@ if __name__ == '__main__':
         raster_layers_csv_blob='config/attribute_list_updated.csv',
         vector_layers_csv_blob='config/vector_list.csv',
         sas_url=sas_url,
-        alternative_path='/data/sids/tmp'
+        out_vector_path='/data/sids/tmp/test/out/'
        )
 
 

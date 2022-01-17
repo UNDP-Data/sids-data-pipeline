@@ -4,7 +4,7 @@ import logging
 import os
 import time
 import asyncio
-
+from data_pipeline.util import scantree, mkdir_recursive
 logger = logging.getLogger(__name__)
 
 
@@ -27,31 +27,6 @@ def atimeit(func):
         return result
 
     return helper
-
-
-
-def scantree(path):
-    """Recursively yield sorted DirEntry objects for given directory."""
-    for entry in sorted(os.scandir(path), key=lambda entry: entry.name):
-        if entry.is_dir(follow_symlinks=False):
-            #yield entry
-            yield from scantree(entry.path)
-        else:
-            yield entry
-
-def mkdir_recursive(path):
-    """
-        make dirs in the path recursively
-        :param path:
-        :return:
-    """
-
-    sub_path = os.path.dirname(path)
-    if not os.path.exists(sub_path):
-        mkdir_recursive(sub_path)
-    if not os.path.exists(path):
-        os.mkdir(path)
-
 
 
 

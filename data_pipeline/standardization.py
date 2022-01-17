@@ -101,7 +101,7 @@ logger = logging.getLogger(__name__)
 
 
 
-@timeit
+#@timeit
 def standardize(src_blob_path=None, dst_prj=4326, band=None,
                 clip_xmin=-180, clip_xmax=180, clip_ymin=-35, clip_ymax=35, clip_ds=None,
                 alternative_path=None, format='GTiff',
@@ -124,6 +124,7 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
         assert os.path.exists(alternative_path), f'intermediary_folder={alternative_path} does not exist'
         dst_path = os.path.join(alternative_path, dst_blob_name)
         if os.path.exists(dst_path):
+
             return gdal.OpenEx(dst_path)
 
 
