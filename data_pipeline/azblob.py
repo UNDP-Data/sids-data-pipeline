@@ -156,10 +156,7 @@ async def upload_file(container_client_instance=None, src=None, dst_blob_name=No
 
     assert dst_blob_name not in [None, '', ' '], f'Invalid destination blob name {dst_blob_name}'
 
-    if dst_blob_name == 'ttt/spatial_ref/0':
-        # logger.info(f'should wait to timeout')
-        # await asyncio.sleep(7)
-        raise Exception('Forced exception')
+
     with open(src, 'rb') as data:
         blob_client = await container_client_instance.upload_blob(name=dst_blob_name, data=data,
                                                         blob_type='BlockBlob', overwrite=overwrite,

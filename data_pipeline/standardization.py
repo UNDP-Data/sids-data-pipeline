@@ -106,10 +106,11 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
                 clip_xmin=-180, clip_xmax=180, clip_ymin=-35, clip_ymax=35, clip_ds=None,
                 alternative_path=None, format='GTiff',
                 no_cpus=NCPUS, multithread=True,
+                assumed_epsg=None
 
                 ):
 
-
+    logger.info(f'Standardizing {src_blob_path}')
 
 
     dst_blob_name = os.path.split(src_blob_path)[-1]
@@ -124,8 +125,9 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
         assert os.path.exists(alternative_path), f'intermediary_folder={alternative_path} does not exist'
         dst_path = os.path.join(alternative_path, dst_blob_name)
         if os.path.exists(dst_path):
-
+            logger.info(f'Reusing {dst_path} instead of {src_blob_path}')
             return gdal.OpenEx(dst_path)
+
 
 
     dst_path = f'/vsimem/{dst_blob_name}'
@@ -232,67 +234,6 @@ def fetch_raster_rows(raster_layers_src_blob=None, sas_url=None):
 
 
 
-
-
-
-def run_pipeline(vector_layers_csv_blob=None, raster_layers_csv_blob=None, stat_func_name='mean', sas_url=None, alternative_path=None):
-
-
-    csv_raster_rows = fetch_raster_rows(raster_layers_src_blob=raster_layers_csv_blob, sas_url=sas_url)
-
-    with ContainerClient.from_container_url(container_url=sas_url) as c:
-            vector_cfg_stream = c.download_blob(vector_layers_csv_blob)
-            with io.BytesIO() as vstr:
-                vector_cfg_stream.readinto(vstr)
-                vstr.seek(0)
-                vlines = (line.decode('utf-8') for line in vstr.readlines())
-                vreader = csv.DictReader(vlines)
-                #vfieldnames = vreader.fieldnames
-                for csv_vector_rows in vreader:
-
-                    vid = csv_vector_rows['vector_id']
-                    if '\\' in csv_vector_rows['file_name']:
-                        vfile_name = csv_vector_rows['file_name'].replace('\\', '/')
-                    else:
-                        vfile_name = csv_vector_rows['file_name']
-                    if '\\' in csv_vector_rows['path']:
-                        vpath = csv_vector_rows['path'].replace('\\', '/')
-                    else:
-                        vpath = csv_vector_rows['path']
-
-                    #src_vector_blob_path = os.path.join('/vsiaz/sids/rawdata', vpath, vfile_name)
-                    src_vector_blob_path = os.path.join('rawdata', vpath.replace('Shapefile', 'Shapefiles'), vfile_name)
-
-                    vect_ds = fetch_az_shapefile(blob_path=src_vector_blob_path, sas_url=sas_url)
-                    for rrow in csv_raster_rows:
-                        rid = rrow['attribute_id']
-                        if '\\' in rrow['file_name']:
-                            rfile_name = rrow['file_name'].replace('\\','/')
-                        else:
-                            rfile_name = rrow['file_name']
-                        if '1a1' in rfile_name:continue
-                        if '\\' in rrow['path']:
-                            rpath = rrow['path'].replace('\\', '/')
-                        else:
-                            rpath = rrow['path']
-                        #print(rpath)
-                        src_raster_blob_path = os.path.join('/vsiaz/sids/', rpath, rfile_name)
-                        print(src_raster_blob_path)
-                        try:
-                            pass
-
-                            # res = zonal_statistics(base_raster_path_band=(src_raster_blob_path, 1), aggregate_vector_path=src_vect)
-                            #
-                            # print(res)
-
-                            break
-                        except Exception as e:
-                            logger.info(e)
-
-                            continue
-
-
-                    break
 
 
 

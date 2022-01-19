@@ -4,7 +4,9 @@ import time
 _, name = os.path.split(__file__)
 logger = logging.getLogger(name)
 from osgeo import gdal, gdalconst, osr
-
+import shutil
+from asyncio.subprocess import PIPE, DEVNULL
+import asyncio
 
 SUPPORTED_FORMATS = {
         'ESRI Shapefile': 'shp',
@@ -86,57 +88,58 @@ def mkdir_recursive(path):
 
 
 
-def fetch_vector_from_azure(blob_path=None, client_container=None, ):
+def fetch_vector_from_azure(blob_path=None, client_container=None,alternative_path=None ):
+    """
 
-    logger.info(f'Fetching {blob_path} from {client_container.container_name} container and')
-
-    # if not 'vsimem' in dst_vect_path:
-    #     if os.path.exists(dst_vect_path):
-    #         logger.info(f'Reading {blob_path} from {dst_vect_path}')
-    #         return gdal.OpenEx(dst_vect_path, gdalconst.OF_VECTOR | gdalconst.OF_READONLY)
+    :param blob_path:
+    :param client_container:
+    :param alternative_path: only for devel
+    :return:
+    """
 
     name = os.path.split(blob_path)[-1]
+
+    if alternative_path is not None:
+        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
+        dst_shp_path = os.path.join(alternative_path, name)
+        if os.path.exists(dst_shp_path):
+            logger.info(f'Reading {blob_path} from {dst_shp_path}')
+            return dst_shp_path
+        else:
+            logger.info(f'{dst_shp_path} does not exist in {alternative_path}. Going to read from {blob_path}')
+
+
+
     root = os.path.splitext(blob_path)[0]
     rroot, ext = os.path.splitext(name)
     read_path = f'/vsimem/{rroot}{ext}'
 
+
     try:
-        dst_vect_path = read_path.replace('.shp', '.geojson')
-        vds = gdal.OpenEx(dst_vect_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
+        logger.info(f'Attempting to read {read_path} from RAM ... ')
+        vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
     except Exception as eee:
-        logger.info(f'Could not fetch {dst_vect_path} from mem')
+        logger.info(f'Could not fetch {read_path} from RAM')
+        for e in ('.shp', '.shx', '.dbf', '.prj'):
+            vsi_pth = f'/vsimem/{rroot}{e}'
+            remote_pth = f'{root}{e}'
+            strm = client_container.download_blob(remote_pth)
+            v = strm.readall()
+            gdal.FileFromMemBuffer(vsi_pth, v)
+        vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
 
-    for e in ('.shp', '.shx', '.dbf', '.prj'):
-        vsi_pth = f'/vsimem/{rroot}{e}'
-        remote_pth = f'{root}{e}'
-        strm = client_container.download_blob(remote_pth)
-        v = strm.readall()
-        gdal.FileFromMemBuffer(vsi_pth, v)
-    vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
-    # if 'Shapefile' in vds.GetDriver().LongName:
-    #     logger.info(f'Converting {read_path} to GeoJSON')
-    #     lname = name.replace('.shp', '.geojson')
-    #     dst_vect_path = read_path.replace('.shp', '.geojson')
-    #     json_vds = gdal.VectorTranslate(destNameOrDestDS=dst_vect_path,
-    #                                     srcDS=vds,
-    #                                     layerName=lname,
-    #                                     format='GeoJSON')
-    #     vds = None
-    #     gdal.Unlink(read_path)
-    #
-    #     return json_vds
-    # else:
-    return vds
+    if alternative_path is not None:
+        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
+        dst_shp_path = os.path.join(alternative_path, name)
+        logger.info(f'Creating {dst_shp_path}')
+        new_ds = gdal.VectorTranslate(destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=name)
+        new_ds = None
 
-    #return gdal.VectorTranslate(destNameOrDestDS=dst_vect_path, srcDS=vds, layerName=blob_name)
+    return read_path
 
 
-    # if not dst_vect_path in ('', None) :
-    #     blob_name = os.path.split(blob_path)[-1]
-    #     logger.info(f'Creating {dst_vect_path}')
-    #     new_ds = gdal.VectorTranslate(destNameOrDestDS=dst_vect_path, srcDS=vds, layerName=blob_name)
-    #     new_ds = None
-    # return vds
+
+
 
 
 
@@ -163,13 +166,7 @@ def fetch_az_shapefile(blob_path=None, client_container=None, alternative_path=N
         dst_shp_path = os.path.join(alternative_path, blob_name)
         if os.path.exists(dst_shp_path):
             logger.info(f'Reading {blob_path} from {alternative_path}')
-            ds = gdal.OpenEx(dst_shp_path, gdalconst.OF_VECTOR|gdalconst.OF_READONLY)
-            prjf = dst_shp_path.replace('.shp', '.prj' )
-            if os.path.exists(prjf) and ds.GetSpatialRef() is None:
-                sr = osr.SpatialReference()
-                sr.ImportFromWkt(open(prjf).read())
-            return ds, sr
-            #return ogr.Open(dst_shp_path, gdal.OF_VECTOR|gdal.OF_READONLY)
+            return gdal.OpenEx(dst_shp_path, gdalconst.OF_VECTOR|gdalconst.OF_UPDATE)
         else:
             logger.info(f'{dst_shp_path} does not exist in {alternative_path}')
 
@@ -187,43 +184,107 @@ def fetch_az_shapefile(blob_path=None, client_container=None, alternative_path=N
         v = strm.readall()
         gdal.FileFromMemBuffer(vsi_pth, v)
     vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
-    #make sure the prj is loaded
-    prj = osr.SpatialReference()
-    prjf = read_path.replace('.shp', '.prj')
-    stat = gdal.VSIStatL(prjf, gdal.VSI_STAT_SIZE_FLAG)
-    vsifile = gdal.VSIFOpenL(prjf, 'r')  # could also use memds.GetDescription() instead of vsipath var
-    prjtxt = gdal.VSIFReadL(1, stat.size, vsifile).decode('utf-8')
-    prj.ImportFromWkt(prjtxt)
-    gdal.VSIFCloseL(vsifile)
-
-    #this code produces sigsegv!!!!!!!!!!!!!
-    #l = vds.GetLayer(0)
-
-    # for feature in l:
-    #     geom = feature.GetGeometryRef()
-    #     ng = geom.Buffer(0.0)
-    #     feature.SetGeometry(ng)
-    #     l.SetFeature(feature)
-    #     #print(feature.GetFID(), feature.GetGeometryRef().GetEnvelope())
-    # l.ResetReading()
-
-    # for feature in l:
-    #     if feature.GetField('NAME_0') == 'Kiribati':
-    #         l.DeleteFeature(feature.GetFID())
-    #     print(feature.GetFID(), feature.GetField('NAME_0'), feature.GetGeometryRef().GetEnvelope())
-    # l.ResetReading()
-
-    # print(l.GetName())
-    # sr = osr.SpatialReference()
-    # sr.ImportFromEPSG(4326)
-    # lc = vds.CopyLayer(l, f'{l.GetName()}_cp', options=[f'DST_SRSWKT={sr.ExportToWkt()}'])
-
 
     if alternative_path is not None:
         assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
         dst_shp_path = os.path.join(alternative_path, blob_name)
         logger.info(f'Creating {dst_shp_path}')
-        new_ds = gdal.VectorTranslate(destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=blob_name, srcSrs=prjtxt)
+        new_ds = gdal.VectorTranslate(destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=blob_name)
         new_ds = None
-    return vds, prj
+    return vds
+
+'''
+
+rm -rf out/mvt;docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm klokantech/tippecanoe tippecanoe /osm/out/admin0.geojson -l admin0 --output-to-directory=/osm/out/mvt 
+/usr/bin/docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm klokantech/tippecanoe tippecanoe /osm/out/admin0.geojson -l admin0 --output-to-directory=/osm/out/mvt 
+
+'''
+
+import subprocess
+def run_tippecanoe(src_geojson_file=None, layer_name=None, minzoom=None, maxzoom=None,
+                   output_mvt_dir_path=None, work_dir='/work',
+                   timeout=600):
+
+    """
+
+    :param src_geojson_file:
+    :param layer_name:
+    :param minzoom:
+    :param maxzoom:
+    :param output_mvt_dir_path:
+    :param work_dir:
+    :return:
+    """
+    # print('tipecanoe -w=/work -v /data/sids/tmp/test/out:/work klokantech/tippecanoe tippecanoe /work/json/admin0.geojson '
+    #       '-l admin0 -e /work/tiles/admin0  -Z 0 -z 12 --allow-existing --no-feature-limit --no-tile-size-limit')
+
+    '''
+        to try and make created tiles 
+        --mount type=bind,source=/etc/passwd,target=/etc/passwd,readonly --mount type=bind,source=/etc/group,target=/etc/group,readonly -u $(id -u $USER):$(id -g $USER)
+
+
+    '''
+
+    logger.info(f'Exporting {layer_name} from {src_geojson_file} to MVT')
+
+    if not output_mvt_dir_path.endswith(os.path.sep):
+        output_mvt_dir_path = f'{output_mvt_dir_path}/'
+
+
+    bind_dir = os.path.commonpath([output_mvt_dir_path, src_geojson_file])
+    if not bind_dir:
+        raise Exception(f'{output_mvt_dir_path} and {src_geojson_file} need to share a common path')
+    if not bind_dir.endswith(os.path.sep):
+        bind_dir = f'{bind_dir}/'
+
+    rel_out_mvt_dir = output_mvt_dir_path.split(bind_dir)[-1]
+    rel_geojson = src_geojson_file.split(bind_dir)[-1]
+
+    container_mvt_dir = os.path.join(work_dir,rel_out_mvt_dir, layer_name)
+    container_geojson = os.path.join(work_dir,rel_geojson)
+
+    # existing_mvt_folder = os.path.join(output_mvt_dir_path, layer_name)
+    # if os.path.exists(existing_mvt_folder):shutil.rmtree(existing_mvt_folder)
+
+    docker_tipecanoe_cmd =  f'docker run --rm -w {work_dir} --name tipecanoe -v {bind_dir}:{work_dir} klokantech/tippecanoe '
+    tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {container_mvt_dir} ' \
+                        f'-z {maxzoom} -Z {minzoom} --allow-existing --no-feature-limit --no-tile-size-limit -f {container_geojson}'
+
+    cmd = f'{docker_tipecanoe_cmd}{tippecanoe_cmd}'
+    # docker_tipecanoe_cmd = f'/usr/bin/docker run --rm  --name tipecanoe klokantech/tippecanoe '
+    #docker_tipecanoe_cmd = f'ls -h'
+
+    with subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+
+        proc.poll()
+        try:
+            outs, errs = proc.communicate(timeout=timeout)
+
+        except subprocess.TimeoutExpired:
+            logger.error(f'{cmd} has timeout out after {timeout} seconds' )
+            proc.kill()
+            outs, errs = proc.communicate()
+        except Exception as e:
+            logger.error(f'{e}')
+            raise
+
+
+        return os.path.join(output_mvt_dir_path, layer_name)
+
+
+from data_pipeline.azblob import HandyContainerClient,folder2azureblob
+
+
+
+async def upload_mvts(sas_url=None, src_folder=None, dst_blob_name=None, timeout=30*60):
+
+    async with HandyContainerClient(sas_url=sas_url) as cc:
+        return await folder2azureblob(
+            container_client_instance=cc,
+            src_folder=src_folder,
+            dst_blob_name=dst_blob_name,
+            overwrite=True,
+            timeout=timeout
+        )
+
 
