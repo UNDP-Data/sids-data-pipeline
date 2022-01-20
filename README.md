@@ -23,6 +23,6 @@ either as a command line argument or an env varfiable SAS_SIDS_CONTAINER can be 
 
 ```mermaid
 graph TD
-    A --> B;
-    A --> C
-``
+A --> B;
+A --> C;
+```
