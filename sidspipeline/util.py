@@ -1,12 +1,13 @@
 import os
 import logging
 import time
-_, name = os.path.split(__file__)
-logger = logging.getLogger(name)
 from osgeo import gdal, gdalconst
-
-
 import subprocess
+
+logger = logging.getLogger(__name__)
+
+
+
 SUPPORTED_FORMATS = {
         'ESRI Shapefile': 'shp',
         'MVT':'pbf',

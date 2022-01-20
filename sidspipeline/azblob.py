@@ -1,11 +1,10 @@
-
+from sidspipeline.util import scantree, mkdir_recursive
 from azure.storage.blob.aio import ContainerClient
 from urllib.parse import urlparse
 import logging
 import os
 import time
-import asyncio
-from data_pipeline.util import scantree, mkdir_recursive
+
 logger = logging.getLogger(__name__)
 
 

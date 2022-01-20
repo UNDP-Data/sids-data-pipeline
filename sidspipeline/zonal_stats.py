@@ -1,7 +1,5 @@
 from pygeoprocessing import geoprocessing as gp
-
 import os
-
 from osgeo import gdal, ogr
 import logging
 import tempfile
