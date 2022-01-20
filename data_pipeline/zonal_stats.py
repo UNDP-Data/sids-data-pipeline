@@ -15,6 +15,13 @@ import time
 logger = logging.getLogger(__name__)
 
 def mode(a, axis=0):
+    """
+    Compute mode in an array
+    :param a: input numpy array
+    :param axis: azis over which to compute default=0 (all)
+
+    :return: number, the mode value
+    """
     scores = np.unique(np.ravel(a))       # get ALL unique values
     testshape = list(a.shape)
     testshape[axis] = 1
@@ -428,9 +435,26 @@ def zonal_statistics(
 
 def zonal_stats(raster_path_or_ds=None, vector_path_or_ds=None, band=None,
                 ignore_nodata=True, polygons_might_overlap=True ):
+    """
+    This functions wraps the adapted zonal_statistics functio from
+    pygeoprocessing so it can be used with vsimem datasets.
+    The vismem datatsets reside in memerory and does sometimes do not need to have a
+    path. This function makes sure the input instances of gdal.Dataset or ogr.DataSource
+    get a path and then calls the above mentioned function
 
-    # wrap rast and vect into vsimem because the pygeoprocessing.zonal_statistics wants
-    # paths not objects
+    :param raster_path_or_ds: str | gdal.Dataset
+    :param vector_path_or_ds: str | ogr.DataSource | gdal.Dataset
+    :param band: band no in the dataset
+    :param ignore_nodata: bool, if nodata should be ignored
+    :param polygons_might_overlap: True, optimisation so the whole datasets are nor rasterized
+    in one go but in chunks based on disjoint polygon sets
+    :return: dict where teh key is the feature ID and the values is a dict with two items
+    the mean and mode values of the stats resulted by computing the mean and mode values of all pixels inside
+    the feature's geometry
+
+    """
+
+
 
     if 'Dataset' in raster_path_or_ds.__class__.__name__:
         _, raster_file_name = os.path.split(raster_path_or_ds.GetFileList()[0])

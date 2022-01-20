@@ -3,11 +3,10 @@ import logging
 import time
 _, name = os.path.split(__file__)
 logger = logging.getLogger(name)
-from osgeo import gdal, gdalconst, osr
-import shutil
-from asyncio.subprocess import PIPE, DEVNULL
-import asyncio
+from osgeo import gdal, gdalconst
 
+
+import subprocess
 SUPPORTED_FORMATS = {
         'ESRI Shapefile': 'shp',
         'MVT':'pbf',
@@ -200,7 +199,7 @@ rm -rf out/mvt;docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm
 
 '''
 
-import subprocess
+
 def run_tippecanoe(src_geojson_file=None, layer_name=None, minzoom=None, maxzoom=None,
                    output_mvt_dir_path=None, work_dir='/work',
                    timeout=600):
@@ -272,19 +271,9 @@ def run_tippecanoe(src_geojson_file=None, layer_name=None, minzoom=None, maxzoom
         return os.path.join(output_mvt_dir_path, layer_name)
 
 
-from data_pipeline.azblob import HandyContainerClient,folder2azureblob
 
 
 
-async def upload_mvts(sas_url=None, src_folder=None, dst_blob_name=None, timeout=30*60):
 
-    async with HandyContainerClient(sas_url=sas_url) as cc:
-        return await folder2azureblob(
-            container_client_instance=cc,
-            src_folder=src_folder,
-            dst_blob_name=dst_blob_name,
-            overwrite=True,
-            timeout=timeout
-        )
 
 

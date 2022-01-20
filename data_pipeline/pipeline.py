@@ -1,7 +1,7 @@
 import logging
 import os
 from data_pipeline.standardization import standardize
-from data_pipeline.azblob import HandyContainerClient
+from data_pipeline.azblob import HandyContainerClient, upload_mvts
 import io
 import csv
 import asyncio
@@ -113,14 +113,15 @@ def run(
             raster_layers_csv_blob=None,
             vector_layers_csv_blob=None,
             sas_url=None,
-            store_attrs_per_vector=False,
+            aggregate_vect=False,
             out_vector_path=None,
             upload_blob_path=None,
             remove_tiles_after_upload=False,
             # the args below should normally not be changed
             root_mvt_folder_name='tiles',
             root_geojson_folder_name = 'json',
-            alternative_path=None
+            alternative_path=None,
+            cache_stat_results=False
 
     ):
     """
@@ -130,7 +131,7 @@ def run(
     :param vector_layers_csv_blob:str, relative path (in respect to the container) if the CSV
             file that contains info related to the raster files to be processed
     :param sas_url: str, MS Azure SAS surl granting rw access to the container
-    :param store_attrs_per_vector: bool, default=??? determines if the zonal statistics
+    :param aggregate_vect: bool, default=True determines if the zonal statistics
             will be accumulated into the vector layers as columns in the attr table. If False,
             a new vector layer/vector tile will be created for every combination of raster and vector
             layers
@@ -150,7 +151,7 @@ def run(
     assert out_vector_path not in ('', None), f'Invalid out_vector_path={out_vector_path}'
 
 
-    per = 'vector' if store_attrs_per_vector else 'raster'
+    per = 'vector' if aggregate_vect else 'raster'
 
     logger.info(f'Going to store vector tiles per {per}')
 
@@ -202,7 +203,7 @@ def run(
                     vsi_vect_path = util.fetch_vector_from_azure(
                         blob_path=src_vector_blob_path,
                         client_container=c,
-                        alternative_path='/data/sids/tmp/test/in'
+                        alternative_path=alternative_path
                     )
                 except ResourceNotFoundError:
                     missing_az_vectors.append(src_vector_blob_path)
@@ -265,22 +266,25 @@ def run(
     for rds_id, tp in vsiaz_rast_paths.items():
         vsiaz_rds_path, band = tp
         # 1 STANDARDIZE
-        stdz_rds = standardize(src_blob_path=vsiaz_rds_path, band=band, alternative_path='/data/sids/tmp/test')
+        stdz_rds = standardize(src_blob_path=vsiaz_rds_path, band=band, alternative_path=alternative_path)
 
         for vds_id, vds_path in vsi_vect_paths.items():
             vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
 
             logger.info(f'Processing zonal stats for raster {rds_id} and {vds_id} ')
-            srf = os.path.join('/data/sids/tmp/test', f'{vds_id}_{rds_id}_stats.json')
-            if not os.path.exists(srf) or os.path.getsize(srf) == 0:
-
+            if not cache_stat_results:
                 stat_result = zonal_stats(raster_path_or_ds=stdz_rds, vector_path_or_ds=vds, band=band)
-                with open(srf, 'w') as out:
-                    json.dump(stat_result, out)
-
             else:
-                with open(srf) as infl:
-                    stat_result = json.load(infl)
+                srf = os.path.join(alternative_path, f'{vds_id}_{rds_id}_stats.json')
+                if not os.path.exists(srf) or os.path.getsize(srf) == 0:
+
+                    stat_result = zonal_stats(raster_path_or_ds=stdz_rds, vector_path_or_ds=vds, band=band)
+                    with open(srf, 'w') as out:
+                        json.dump(stat_result, out)
+
+                else:
+                    with open(srf) as infl:
+                        stat_result = json.load(infl)
 
 
 
@@ -295,7 +299,7 @@ def run(
 
 
 
-            if not store_attrs_per_vector:
+            if not aggregate_vect:
                 #1 convert vds to GeoJSON as rds_id/vds_id.json
                 vector_geojson_path = os.path.join(vector_json_dir, f'{rds_id}_{vds_id}.geojson')
                 if os.path.exists(vector_geojson_path):
@@ -397,12 +401,13 @@ def run(
     shutil.rmtree(geojson_root_folder)
 
 
-    asyncio.run(util.upload_mvts(
-        sas_url=sas_url,
-        src_folder=mvt_root_folder,
-        dst_blob_name=upload_blob_path,
-        timeout=3*60*60 #three hours
-        )
+    asyncio.run(
+        upload_mvts(
+            sas_url=sas_url,
+            src_folder=mvt_root_folder,
+            dst_blob_name=upload_blob_path,
+            timeout=3*60*60 #three hours
+            )
     )
     missing_files = missing_az_vectors+missing_az_rasters
     for missing_file in missing_files:
@@ -413,236 +418,6 @@ def run(
 
 
 
-
-
-#
-# def run(raster_layers_csv_blob=None, vector_layers_csv_blob=None,
-#         sas_url=None,
-#         store_attrs_per_vector=True,
-#         out_vector_path=None,
-#         vector_format={'ESRI Shapefile':'.shp'},
-#         dst_srs=3857
-#         ):
-#
-#     assert out_vector_path not in ('', None), f'Invalid out_vector_path={out_vector_path}'
-#
-#     assert  vector_format, f'Invalid vector_format={vector_format}. Valid options are {util.SUPPORTED_FORMATS} '
-#
-#     vformat, ext = next(iter(vector_format.items()))
-#
-#     assert vformat  in util.SUPPORTED_FORMATS, f'Invalid format={vector_format}. Valid options are {util.SUPPORTED_FORMATS}'
-#
-#     per = 'vector' if store_attrs_per_vector else 'raster'
-#
-#     logger.info(f'Going to store vector tiles per {per}')
-#
-#     wmercP = osr.SpatialReference()
-#     wmercP.ImportFromEPSG(dst_srs)
-#
-#     # make a sync container client
-#     with ContainerClient.from_container_url(container_url=sas_url) as c:
-#         vector_datasets = dict()
-#         vector_csv_stream = c.download_blob(vector_layers_csv_blob)
-#
-#         with io.BytesIO() as vstr:
-#             vector_csv_stream.readinto(vstr)
-#             vstr.seek(0)
-#             vlines = (line.decode('utf-8') for line in vstr.readlines())
-#             vreader = csv.DictReader(vlines)
-#
-#             for csv_vector_row in vreader:
-#
-#
-#                 vid = csv_vector_row['vector_id']
-#                 if '\\' in csv_vector_row['file_name']:
-#                     vfile_name = csv_vector_row['file_name'].replace('\\', '/')
-#                 else:
-#                     vfile_name = csv_vector_row['file_name']
-#                 if '\\' in csv_vector_row['path']:
-#                     vpath = csv_vector_row['path'].replace('\\', '/')
-#                 else:
-#                     vpath = csv_vector_row['path']
-#
-#                 # src_vector_blob_path = os.path.join('/vsiaz/sids/rawdata', vpath, vfile_name)
-#                 src_vector_blob_path = os.path.join('rawdata', vpath.replace('Shapefile', 'Shapefiles'), vfile_name)
-#
-#                 if out_vector_path not in ('', None):
-#                     vect_path = os.path.join(out_vector_path, 'in')
-#                 else:
-#                     vect_path = f'/vsimem/{vfile_name}'
-#
-#                 #TODO do not forget to set vecpath ot vsimem
-#
-#                 vds, prj = util.fetch_az_shapefile(  blob_path=src_vector_blob_path,
-#                                                 client_container=c,
-#                                                 alternative_path='/data/sids/tmp/test/in')
-#
-#                 #print_field_names(vds,'aaa')
-#                 vector_datasets[vid] = vds, prj
-#
-#                 break
-#
-#         nrp = 0
-#         # fetch a stream
-#         rast_csv_stream = c.download_blob(raster_layers_csv_blob)
-#         # push the binary stream into RAM
-#         with io.BytesIO() as rstr:
-#             rast_csv_stream.readinto(rstr)
-#             # need to position at the beginning
-#             rstr.seek(0)
-#             # cretae a generator of text lines from the binary lines
-#             rlines = (line.decode('utf-8') for line in rstr.readlines())
-#             # instantitae  a reader
-#             rreader = csv.DictReader(rlines)
-#             for raster_csv_row in rreader:
-#
-#                 rid = raster_csv_row['attribute_id']
-#                 band = int(raster_csv_row['band'])
-#                 if '\\' in raster_csv_row['file_name']:
-#                     rfile_name = raster_csv_row['file_name'].replace('\\', '/')
-#                 else:
-#                     rfile_name = raster_csv_row['file_name']
-#
-#                 if '\\' in raster_csv_row['path']:
-#                     rpath = raster_csv_row['path'].replace('\\', '/')
-#                 else:
-#                     rpath = raster_csv_row['path']
-#
-#                 src_raster_blob_path = os.path.join('/vsiaz/sids/', rpath, rfile_name)
-#                 logger.debug(f'Processing {src_raster_blob_path}')
-#                 # standardize
-#                 #TODO remove alternative_path
-#                 stdz_ds = standardize(src_blob_path=src_raster_blob_path,band=band, alternative_path='/data/sids/tmp/test')
-#                 #iterate over vectors and
-#                 for vds_id, t in vector_datasets.items():
-#                     vds, src_prj = t
-#
-#                     srf = os.path.join('/data/sids/tmp/test', f'{rid}_st.json')
-#
-#                     if not os.path.exists(srf) or os.path.getsize(srf) == 0:
-#
-#                         stat_result = zonal_stats(raster_path_or_ds=stdz_ds, vector_path_or_ds=vds, band=band)
-#                         with open(srf, 'w') as out:
-#                             json.dump(stat_result, out)
-#
-#                     else:
-#                         with open(srf) as infl:
-#                             stat_result = json.load(infl)
-#
-#
-#                     lname = rid
-#
-#
-#                     if store_attrs_per_vector:
-#                         logger.debug(f'Storing attrs per vector')
-#                         web_merc_vect_path = f'{os.path.join("/vsimem", vds_id)}{ext}'
-#
-#                         try:
-#                             logger.info(f'Attempting to open {web_merc_vect_path}')
-#                             web_merc_ds =  gdal.OpenEx(web_merc_vect_path, gdal.OF_UPDATE|gdal.OF_VECTOR)
-#
-#                         except Exception as e:
-#                             logger.info(f'Creating layer {lname} in {web_merc_vect_path}')
-#
-#                             opts = gdal.VectorTranslateOptions(format=vformat,
-#                                                                dstSRS=wmercP.ExportToWkt(),
-#                                                                srcSRS=src_prj.ExportToWkt(),
-#                                                                reproject=True,
-#                                                                addFields=True,
-#                                                                # datasetCreationOptions=[],
-#                                                                # layerCreationOptions=['COORDINATE_PRECISION=5',
-#                                                                #                       'RFC7946=YES'],
-#                                                                layerName=lname,
-#                                                                skipFailures=True,
-#                                                                )
-#                             flist = [e for e in vds.GetFileList() if ".shp" in e]
-#                             if flist:
-#                                 fn = flist[0]
-#                                 logger.info(f'Reprojecting {fn} to {web_merc_vect_path}')
-#                             # reproject
-#                             web_merc_ds = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path, srcDS=vds,
-#                                                                options=opts)
-#
-#                         add_field_to_vector(src_ds=web_merc_ds, stats_dict=stat_result, field_name=rid)
-#
-#                     else:
-#                         logger.debug('Storing attrs per raster')
-#                         web_merc_vect_path_json = f'{os.path.join(out_vector_path or "/vsimem", rid, vds_id)}.json'
-#                         web_merc_vect_path = f'{os.path.join("/vsimem", rid, vds_id)}{ext}'
-#
-#                         basedir = os.path.dirname(web_merc_vect_path_json)
-#                         if not os.path.exists(basedir):
-#                             util.mkdir_recursive(basedir)
-#                         try:
-#
-#                             src_ds =  gdal.OpenEx(web_merc_vect_path, gdal.OF_UPDATE|gdal.OF_VECTOR)
-#                             driver = src_ds.GetDriver()
-#                             driver.Delete(web_merc_vect_path)
-#                             src_ds = None
-#                             logger.info(f'Removed {web_merc_vect_path}')
-#                         except Exception as e:
-#
-#                             pass
-#
-#                         logger.info(f'Creating layer {lname} in {web_merc_vect_path}')
-#
-#                         opts = gdal.VectorTranslateOptions(format=vformat,
-#                                                            dstSRS=wmercP.ExportToWkt(),
-#                                                            srcSRS=src_prj.ExportToWkt(),
-#                                                            reproject=True,
-#                                                            addFields=True,
-#                                                            # datasetCreationOptions=[],
-#                                                            # layerCreationOptions=['COORDINATE_PRECISION=5',
-#                                                            #                       'RFC7946=YES'],
-#                                                            layerName=lname,
-#                                                            skipFailures=True,
-#                                                            )
-#                         logger.info(f'Reprojecting {vds.GetFileList()} to {web_merc_vect_path}')
-#                         # reproject
-#                         web_merc_ds = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path, srcDS=vds,
-#                                                            options=opts)
-#
-#
-#
-#
-#                         add_field_to_vector(src_ds=web_merc_ds, stats_dict=stat_result, field_name=rid)
-#                         web_merc_ds_json = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path_json, srcDS=web_merc_ds,
-#                                                             format='GeoJSON'
-#                                                            )
-#                         web_merc_ds_json = None
-#                         web_merc_ds = None
-#
-#                 nrp+=1
-#
-#
-#                 logger.info(f'Finished processing raster id {rid}')
-#                 if nrp == 3:
-#                     break
-#
-#         for vds_id, t in vector_datasets.items():
-#             vds, prj = t
-#             if store_attrs_per_vector:
-#                 web_merc_vect_path = f'{os.path.join("/vsimem", vds_id)}{ext}'
-#                 web_merc_vect_path_json = f'{os.path.join(out_vector_path, vds_id)}.json'
-#                 basedir = os.path.dirname(web_merc_vect_path_json)
-#                 if not os.path.exists(basedir):
-#                     util.mkdir_recursive(basedir)
-#                 web_merc_ds_json = gdal.VectorTranslate(destNameOrDestDS=web_merc_vect_path_json, srcDS=web_merc_vect_path,
-#                                                     format='GeoJSON'
-#                                                     )
-#
-#                 web_merc_ds_json = None
-#
-#             if vds:
-#                 fpl = vds.GetFileList()
-#                 vds = None
-#                 prj = None
-#                 if fpl:
-#                     for fp in fpl:
-#                         if 'vsimem' in fp:
-#                             logger.info(f'Unlinking {fp}')
-#                             gdal.Unlink(fp)
-#
 
 def print_field_names(src_ds, aname):
     """
@@ -691,68 +466,70 @@ if __name__ == '__main__':
     rlogger.name = os.path.split(__file__)[-1]
 
 
-
-    csv_config_blob_path = 'config'
-    sas_url = 'https://undpngddlsgeohubdev01.blob.core.windows.net/sids?sp=racwdl&st=2022-01-06T21:09:27Z&se=2032-01-07T05:09:27Z&spr=https&sv=2020-08-04&sr=c&sig=XtcP1UUnboo7gSVHOXeTbUt0g%2FSV2pxG7JVgmZ8siwo%3D'
-
+    ##### EXAMPLE ######################
+    #csv_config_blob_path = 'config'
+    #sas_url = 'https://undpngddlsgeohubdev01.blob.core.windows.net/sids?sp=racwdl&st=2022-01-06T21:09:27Z&se=2032-01-07T05:09:27Z&spr=https&sv=2020-08-04&sr=c&sig=XtcP1UUnboo7gSVHOXeTbUt0g%2FSV2pxG7JVgmZ8siwo%3D'
+    # run(
+    #     raster_layers_csv_blob='config/attribute_list_updated.csv',
+    #     vector_layers_csv_blob='config/vector_list.csv',
+    #     sas_url=sas_url,
+    #     out_vector_path='/data/sids/tmp/test/out/',
+    #     aggregate_vect=True,
+    #     upload_blob_path='vtiles',
+    #     remove_tiles_after_upload=True,
+    #
+    # )
+    ##### EXAMPLE ######################
 
     import argparse as ap
 
     arg_parser = ap.ArgumentParser(formatter_class=ap.ArgumentDefaultsHelpFormatter)
-    arg_parser.add_argument('-rblob', '--raster_layers_csv_blob', type=str, required=True,
+    arg_parser.add_argument('-rb', '--raster_layers_csv_blob', type=str, required=True,
                             help='relative path(in respect to the container) of the CSV \
             file that holds info in respect to vector layers', )
-    arg_parser.add_argument('-vblob', '--vector_layers_csv_blob', type=str, default=None,
+    arg_parser.add_argument('-vb', '--vector_layers_csv_blob', type=str, default=None,
                             help='relative path (in respect to the container) if the CSV\
                             file that contains info related to the raster files to be processed', )
-    arg_parser.add_argument('-surl', '--sas_url', default=None,
+    arg_parser.add_argument('-su', '--sas_url', default=None,
                             help='MS Azure SAS url granting rw access to the container',
                             type=str)
-    arg_parser.add_argument('-ovp', '--out_vector_path',
+    arg_parser.add_argument('-ov', '--out_vector_path',
                             help='abs path to a folder where output data (MVT and JSON) is going to be stored', type=str
                             )
-    arg_parser.add_argument('-ublob', '--upload_blob_path',
+    arg_parser.add_argument('-ub', '--upload_blob_path',
                             help='relative path (to the container) where the MVT data will be copied', type=str,
                             )
 
-    arg_parser.add_argument('-pvect', '--store_attrs_per_vector',
-                            help='relative path (to the container) where the MVT data will be copied', type=str,
+    arg_parser.add_argument('-ag', '--aggregate_vect',
+                            help='determines if the zonal statistics will be accumulated into the vector layers as '
+                                 'columns in the attr table. If False, a new vector layer/vector tile will be created '
+                                 'for every combination of raster and vector layers', type=bool,
+                            default=True
                             )
+
+    # parse and collect args
+    args = arg_parser.parse_args()
+
+    raster_layers_csv_blob = args.raster_layers_csv_blob
+    vector_layers_csv_blob = args.vector_layers_csv_blob
+    sas_url = args.sas_url
+    upload_blob_path = args.upload_blob_path
+    remove_tiles_after_upload = args.remove_tiles_after_upload
+    out_vector_path = args.out_vector_path
+    aggregate_vect = args.aggregate_vect
+
+    # use env variable SAS_SIDS_CONTAINER
+    sas_url = sas_url or os.environ.get('SAS_SIDS_CONTAINER', None)
+
 
     run(
-        raster_layers_csv_blob='config/attribute_list_updated.csv',
-        vector_layers_csv_blob='config/vector_list.csv',
+        raster_layers_csv_blob=raster_layers_csv_blob,
+        vector_layers_csv_blob=vector_layers_csv_blob,
         sas_url=sas_url,
-        out_vector_path='/data/sids/tmp/test/out/',
-        upload_blob_path='vtiles',
-        remove_tiles_after_upload=True,
+        out_vector_path=out_vector_path,
+        aggregate_vect=aggregate_vect,
+        upload_blob_path=upload_blob_path,
+        remove_tiles_after_upload=remove_tiles_after_upload,
+
 
        )
-    '''
-    :param raster_layers_csv_blob: str, relative path(in respect to the container) of the CSV
-            file that holds info in respect to vector layers
-    :param vector_layers_csv_blob:str, relative path (in respect to the container) if the CSV
-            file that contains info related to the raster files to be processed
-    :param sas_url: str, MS Azure SAS surl granting rw access to the container
-    :param store_attrs_per_vector: bool, default=??? determines if the zonal statistics
-            will be accumulated into the vector layers as columns in the attr table. If False,
-            a new vector layer/vector tile will be created for every combination of raster and vector
-            layers
-
-    :param out_vector_path:str, abs path to a folder where output data (MVT) is going to be stored
-    :param upload_blob_path: str, relative path (to the container) where the MVT data will be copied
-
-    :param remove_tiles_after_upload: bool, default=False, if True the MVT data will be removed
-    :param root_mvt_folder_name: str, the name of the folder where all MVT's will be stored inside the
-            out_vector_path folder
-    :param root_geojson_folder_name: str, the name of the folder where the GeoJSON datat will be written
-            inside the out_vector_path folder
-    :param alternative_path: str, full path to a folder where the incoming thata that is downlaoded will be stored and
-            cached. Used during developemnt
-    '''
-
-
-
-
-
-

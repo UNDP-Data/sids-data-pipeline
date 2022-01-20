@@ -1,4 +1,5 @@
-from azure.storage.blob.aio import ContainerClient, BlobClient
+
+from azure.storage.blob.aio import ContainerClient
 from urllib.parse import urlparse
 import logging
 import os
@@ -341,6 +342,28 @@ async def download_folder_from_azure(container_client_instance=None, src_blob_na
     except Exception as err:
         logger.error(err)
         raise
+
+
+async def upload_mvts(sas_url=None, src_folder=None, dst_blob_name=None, timeout=30*60):
+    """
+    Asyn upload a folder to Azure blob
+    :param sas_url: str, the SAS url
+    :param src_folder: str, full abs path to the folder
+    :param dst_blob_name: str, relative (to container) timeout of the
+    :param timeout:
+    :return:
+    """
+
+    async with HandyContainerClient(sas_url=sas_url) as cc:
+        return await folder2azureblob(
+            container_client_instance=cc,
+            src_folder=src_folder,
+            dst_blob_name=dst_blob_name,
+            overwrite=True,
+            timeout=timeout
+        )
+
+
 
 if __name__ == '__main__':
 
