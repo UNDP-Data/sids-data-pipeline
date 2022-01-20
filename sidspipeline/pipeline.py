@@ -447,7 +447,7 @@ def print_field_names(src_ds, aname):
 
 
 
-if __name__ == '__main__':
+def main():
 
     logging.basicConfig()
     sthandler = logging.StreamHandler()
