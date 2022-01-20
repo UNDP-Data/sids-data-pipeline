@@ -436,9 +436,9 @@ def zonal_statistics(
 def zonal_stats(raster_path_or_ds=None, vector_path_or_ds=None, band=None,
                 ignore_nodata=True, polygons_might_overlap=True ):
     """
-    This functions wraps the adapted zonal_statistics functio from
-    pygeoprocessing so it can be used with vsimem datasets.
-    The vismem datatsets reside in memerory and does sometimes do not need to have a
+    This functions wraps the adapted zonal_statistics function from
+    pygeoprocessing package so it can be used with vsimem datasets.
+    The vismem datasets reside in memory and  sometimes do not  have a
     path. This function makes sure the input instances of gdal.Dataset or ogr.DataSource
     get a path and then calls the above mentioned function
 
