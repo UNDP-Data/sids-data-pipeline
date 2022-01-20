@@ -14,15 +14,54 @@ The data pipeline consists of three blocks
 
 ### 1. Sources
 
-The input consists of paths from where the ratser and vector CSV spec files are downlaoded.
-Obviously a  Azure container SAS url is required to access the Azure container. This can be provided
-either as a command line argument or an env varfiable SAS_SIDS_CONTAINER can be created to store the url
+The input consists of paths from where the raster and vector CSV spec files are downloaded.
+Obviously an Azure container SAS url is required to access the CSV files. This can be provided
+either as a command line argument or an env. variable SAS_SIDS_CONTAINER can be created to store the url.
 
 ### 2. Processing
 
 
-```mermaid
-graph TD
-A --> B;
-A --> C;
-```
+######        1. Standardization
+
+    Ensures all data is brought to a common set of specs:
+        a) ESPG:4326 projection
+        b) clipped to lonmin=-180, lonmax=180, latmin=-35, latmax=35
+
+######        2. Zonal stats
+
+      Zonal statistics (mode and mean) are computed for each feature in a given vector from
+       every available raster
+
+######        3. Export to MVT using tippecanoe
+
+    The results from zonal stats are added to the vector geometries in each layer in attribute
+    columns. Depending on the provided arguments the attributes are either added to the same vector layer
+    or new layers are created for every raster layer. Then the MVT are exported using tippecanoe.
+
+
+### 3. Upload to Azure blob
+    In the last ste the whole folder that contains the MVT files is uploded asynchronously to an Azure Blob container
+    Optionally the fodler can be also removed
+
+
+
+## Notes
+
+Originally the plan was to use GDAL to do the whole job but this was a no go because GDAL  
+could not translate  some of the vector layers to MVT format. Apparently the admin layers contain features  
+whose bounding box spans accross the whole world. The GDAL MVT driver can not handle these kind of  
+of geometries and was getting struck in infinite loops. An [issue](https://github.com/OSGeo/gdal/issues/5109)
+was submitted and if this will be resolved  
+we could switch to GDAL entirely to do the job.
+
+An alternative solution is to do som pre-processing on the original
+
+As a result we resorted to using tippecanoe to export the data to MVT. For practical purposes,  
+we used the dockerized version of tippecanoe as it is relatively straightforward to set up.
+
+
+
+
+## Hands on
+
+
