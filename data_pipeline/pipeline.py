@@ -482,8 +482,22 @@ if __name__ == '__main__':
     ##### EXAMPLE ######################
 
     import argparse as ap
+    import sys
 
-    arg_parser = ap.ArgumentParser(formatter_class=ap.ArgumentDefaultsHelpFormatter)
+    class HelpParser(ap.ArgumentParser):
+        def error(self, message):
+            #sys.stderr.write('error: %s\n' % message)
+            self.print_help()
+            sys.exit(0)
+
+    arg_parser = HelpParser(formatter_class=ap.ArgumentDefaultsHelpFormatter,
+                                   description='Run the SIDS data pipeline. The pipeline computes zonal stats for a'
+                                               ' number of vector layers from a number of raster layers.\nThe results'
+                                               ' are converted into MapBox Vector Tile format and uploaded to an Azure Blob'
+                                               ' storage container.\nThe specs for the raster and vector files are fetched'
+                                               ' from CSV files stored in same Azure Blob storage.'
+
+                                   )
     arg_parser.add_argument('-rb', '--raster_layers_csv_blob', type=str, required=True,
                             help='relative path(in respect to the container) of the CSV \
             file that holds info in respect to vector layers', )
@@ -491,7 +505,8 @@ if __name__ == '__main__':
                             help='relative path (in respect to the container) if the CSV\
                             file that contains info related to the raster files to be processed', )
     arg_parser.add_argument('-su', '--sas_url', default=None,
-                            help='MS Azure SAS url granting rw access to the container',
+                            help='MS Azure SAS url granting rw access to the container. Alternatively the environment'
+                                 'variable SAS_SIDS_CONTAINER can be used to supply a SAS URL',
                             type=str)
     arg_parser.add_argument('-ov', '--out_vector_path',
                             help='abs path to a folder where output data (MVT and JSON) is going to be stored', type=str
