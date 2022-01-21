@@ -71,8 +71,14 @@ docker needs to be installed
     mkdir sidspipeline
     git clone https://github.com/UNDP-Data/sids-data-pipeline.git
     cd sids-data-pipeline
+    
     docker build -t sidsdatapipeline:1.0.0 -f ./Dockerfile ./
     
+    # test the script
+    
+    
+    docker run  -ti --rm --name=sidspipe --env-file .env -v /data:/data sidsdatapipeline:1.0.0 -rb=config/attribute_list_updated.csv -vb=config/vector_list.csv -ov /data/sids/tmp/test1 -ub=vtiles1 -ag=True -ap=/data/sids/tmp/test
+
     
 ```
 
