@@ -63,5 +63,18 @@ we used the dockerized version of tippecanoe as it is relatively straightforward
 
 
 ## Hands on
+docker needs to be installed
+
+### From GitHub
+
+```bash
+    mkdir sidspipeline
+    git clone https://github.com/UNDP-Data/sids-data-pipeline.git
+    cd sids-data-pipeline
+    docker build -t sidsdatapipeline:1.0.0 -f ./Dockerfile ./
+    
+    
+```
+
 
 

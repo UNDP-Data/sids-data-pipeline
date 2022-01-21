@@ -121,7 +121,7 @@ def run(
             root_mvt_folder_name='tiles',
             root_geojson_folder_name = 'json',
             alternative_path=None,
-            cache_stat_results=False
+            cache_stat_results=True
 
     ):
     """
@@ -148,6 +148,7 @@ def run(
             cached. Used during developemnt
     :return:
     """
+    assert raster_layers_csv_blob not in ('')
     assert out_vector_path not in ('', None), f'Invalid out_vector_path={out_vector_path}'
 
 
@@ -161,7 +162,7 @@ def run(
 
     # used to stop parsing all data during deve;
     rast_break_at = 3
-    vect_break_at = 3
+    vect_break_at = 1
 
     missing_az_vectors = list()
     missing_az_rasters = list()
@@ -177,7 +178,6 @@ def run(
             vreader = csv.DictReader(vlines)
             nv = 0
             for csv_vector_row in vreader:
-
 
                 vid = csv_vector_row['vector_id']
                 if '\\' in csv_vector_row['file_name']:
@@ -216,13 +216,17 @@ def run(
 
         # fetch  raster stream
         rast_csv_stream = c.download_blob(raster_layers_csv_blob)
+        logger.debug(f'{raster_layers_csv_blob} was successfully downloaded..')
         # push the binary stream into RAM
         with io.BytesIO() as rstr:
             rast_csv_stream.readinto(rstr)
+            logger.debug(f'{rstr.tell()} bytes were fetched from {raster_layers_csv_blob}')
             # need to position at the beginning
             rstr.seek(0)
-            # cretae a generator of text lines from the binary lines
+
+            # create a generator of text lines from the binary lines
             rlines = (line.decode('utf-8') for line in rstr.readlines())
+
             # instantitae  a reader
             rreader = csv.DictReader(rlines)
             nr = 0
@@ -250,6 +254,7 @@ def run(
                     vsiaz_rast_paths[rid] = src_raster_blob_path, band
                     logger.info(f'{src_raster_blob_path} is going to be aggregated for zonal stats')
                 except Exception as e:
+                    logger.info(f'{src_raster_blob_path} {e}')
                     missing_az_rasters.append(src_raster_blob_path)
                     continue
                 nr+=1
@@ -261,6 +266,14 @@ def run(
 
     no_proc_rast = 0
     n_rast_to_process = len(vsiaz_rast_paths)
+    n_vect_to_process = len(vsi_vect_paths)
+    if n_rast_to_process == 0:
+        logger.warning(f'No raster file spec were fetched from {raster_layers_csv_blob}. Going to exit.')
+        exit()
+    if n_vect_to_process == 0:
+        logger.warning(f'No vector file spec were fetched from {vector_layers_csv_blob}. Going to exit.')
+        exit()
+
     logger.info(f'Going to process {n_rast_to_process} raster file/s and {len(vsi_vect_paths)} vector file/s')
 
     for rds_id, tp in vsiaz_rast_paths.items():
@@ -283,6 +296,7 @@ def run(
                         json.dump(stat_result, out)
 
                 else:
+                    logger.info(f'Reusing zonal stats from {srf}')
                     with open(srf) as infl:
                         stat_result = json.load(infl)
 
@@ -397,8 +411,8 @@ def run(
     #upload mvt to blob
     mvt_root_folder = os.path.join(out_vector_path, root_mvt_folder_name)
     geojson_root_folder = os.path.join(out_vector_path, root_geojson_folder_name)
-
-    shutil.rmtree(geojson_root_folder)
+    if os.path.exists(geojson_root_folder):
+        shutil.rmtree(geojson_root_folder)
 
 
     asyncio.run(
@@ -454,18 +468,11 @@ def main():
     sthandler.setFormatter(logging.Formatter('%(asctime)s-%(filename)s:%(funcName)s:%(lineno)d:%(levelname)s:%(message)s',
                                              "%Y-%m-%d %H:%M:%S"))
 
-    rlogger = logging.getLogger()
-    azlogger = logging.getLogger('azure.storage')
-    azlogger.setLevel(logging.NOTSET)
+
+    azlogger = logging.getLogger('azure.core.pipeline.policies.http_logging_policy')
+    azlogger.setLevel(logging.WARNING)
 
 
-
-    # remove the default stream handler and add the new on too it.
-    rlogger.handlers.clear()
-    rlogger.addHandler(sthandler)
-
-    rlogger.setLevel('INFO')
-    rlogger.name = os.path.split(__file__)[-1]
 
 
     ##### EXAMPLE ######################
@@ -484,13 +491,13 @@ def main():
     ##### EXAMPLE ######################
 
     import argparse as ap
-    import sys
+
 
     class HelpParser(ap.ArgumentParser):
         def error(self, message):
             #sys.stderr.write('error: %s\n' % message)
             self.print_help()
-            sys.exit(0)
+            exit(0)
 
     arg_parser = HelpParser(formatter_class=ap.ArgumentDefaultsHelpFormatter,
                                    description='Run the SIDS data pipeline. The pipeline computes zonal stats for a'
@@ -523,6 +530,19 @@ def main():
                                  'for every combination of raster and vector layers', type=bool,
                             default=True
                             )
+    arg_parser.add_argument('-rmt', '--remove_tiles_after_upload',
+                            help='if the tiles should be removed after upload', type=bool,
+                            default=True
+                            )
+    arg_parser.add_argument('-ap', '--alternative_path',
+                            help='Abs path to a folder where input data can be cached', type=str
+                            )
+
+
+    arg_parser.add_argument('-d', '--debug',
+                            help='debug mode on/off', type=bool,
+                            default=False
+                            )
 
     # parse and collect args
     args = arg_parser.parse_args()
@@ -534,10 +554,21 @@ def main():
     remove_tiles_after_upload = args.remove_tiles_after_upload
     out_vector_path = args.out_vector_path
     aggregate_vect = args.aggregate_vect
+    debug = args.debug
+    alternative_path=args.alternative_path
+
+    rlogger = logging.getLogger()
+    # remove the default stream handler and add the new on too it.
+    rlogger.handlers.clear()
+    rlogger.addHandler(sthandler)
+    if debug:
+        rlogger.setLevel(logging.DEBUG)
+    else:
+        rlogger.setLevel(logging.INFO)
+    rlogger.name = os.path.split(__file__)[-1]
 
     # use env variable SAS_SIDS_CONTAINER
     sas_url = sas_url or os.environ.get('SAS_SIDS_CONTAINER', None)
-
 
     run(
         raster_layers_csv_blob=raster_layers_csv_blob,
@@ -547,6 +578,7 @@ def main():
         aggregate_vect=aggregate_vect,
         upload_blob_path=upload_blob_path,
         remove_tiles_after_upload=remove_tiles_after_upload,
+        alternative_path=alternative_path
 
 
        )

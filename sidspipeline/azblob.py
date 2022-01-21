@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 import logging
 import os
 import time
-
+import asyncio
 logger = logging.getLogger(__name__)
 
 
@@ -366,7 +366,7 @@ async def upload_mvts(sas_url=None, src_folder=None, dst_blob_name=None, timeout
 
 if __name__ == '__main__':
 
-    import asyncio
+
     logging.basicConfig()
     logger.setLevel('INFO')
     write_sas_url = 'https://undpngddlsgeohubdev01.blob.core.windows.net/test?sp=racwdl&st=2022-01-05T20:59:44Z&se=2023-01-06T04:59:44Z&spr=https&sv=2020-08-04&sr=c&sig=MkEoynTO0ftlLH95zq%2BXgjWl1%2F8um9OiYo1hpd6ufwE%3D'

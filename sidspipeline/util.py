@@ -119,7 +119,7 @@ def fetch_vector_from_azure(blob_path=None, client_container=None,alternative_pa
         logger.info(f'Attempting to read {read_path} from RAM ... ')
         vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
     except Exception as eee:
-        logger.info(f'Could not fetch {read_path} from RAM')
+        logger.info(f'Could not fetch {read_path} from RAM. Going to fetch it from {blob_path}')
         for e in ('.shp', '.shx', '.dbf', '.prj'):
             vsi_pth = f'/vsimem/{rroot}{e}'
             remote_pth = f'{root}{e}'
@@ -127,6 +127,7 @@ def fetch_vector_from_azure(blob_path=None, client_container=None,alternative_pa
             v = strm.readall()
             gdal.FileFromMemBuffer(vsi_pth, v)
         vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
+        logger.debug(f'{blob_path} was downloaded and stored to {read_path}')
 
     if alternative_path is not None:
         assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
@@ -201,9 +202,16 @@ rm -rf out/mvt;docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm
 '''
 
 
-def run_tippecanoe(src_geojson_file=None, layer_name=None, minzoom=None, maxzoom=None,
-                   output_mvt_dir_path=None, work_dir='/work',
-                   timeout=600):
+def run_tippecanoe(
+
+        src_geojson_file=None,
+        layer_name=None,
+        minzoom=None,
+        maxzoom=None,
+        output_mvt_dir_path=None,
+        work_dir='/work',
+        timeout=600
+    ):
 
     """
 
@@ -224,7 +232,8 @@ def run_tippecanoe(src_geojson_file=None, layer_name=None, minzoom=None, maxzoom
 
 
     '''
-
+    print(src_geojson_file)
+    print(output_mvt_dir_path)
     logger.info(f'Exporting {layer_name} from {src_geojson_file} to MVT')
 
     if not output_mvt_dir_path.endswith(os.path.sep):
@@ -246,11 +255,13 @@ def run_tippecanoe(src_geojson_file=None, layer_name=None, minzoom=None, maxzoom
     # existing_mvt_folder = os.path.join(output_mvt_dir_path, layer_name)
     # if os.path.exists(existing_mvt_folder):shutil.rmtree(existing_mvt_folder)
 
-    docker_tipecanoe_cmd =  f'docker run --rm -w {work_dir} --name tipecanoe -v {bind_dir}:{work_dir} klokantech/tippecanoe '
+    #docker_tippecanoe_cmd =  f'docker run --rm -w {work_dir} --name tipecanoe -v {bind_dir}:{work_dir} klokantech/tippecanoe '
+    docker_tippecanoe_cmd = ''
     tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {container_mvt_dir} ' \
                         f'-z {maxzoom} -Z {minzoom} --allow-existing --no-feature-limit --no-tile-size-limit -f {container_geojson}'
 
-    cmd = f'{docker_tipecanoe_cmd}{tippecanoe_cmd}'
+    cmd = f'{docker_tippecanoe_cmd}{tippecanoe_cmd}'
+    print(cmd)
     # docker_tipecanoe_cmd = f'/usr/bin/docker run --rm  --name tipecanoe klokantech/tippecanoe '
     #docker_tipecanoe_cmd = f'ls -h'
 
