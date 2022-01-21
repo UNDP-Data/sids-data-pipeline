@@ -121,7 +121,7 @@ def run(
             root_mvt_folder_name='tiles',
             root_geojson_folder_name = 'json',
             alternative_path=None,
-            cache_stat_results=True
+
 
     ):
     """
@@ -161,8 +161,8 @@ def run(
     mvt_folder_paths =dict()
 
     # used to stop parsing all data during deve;
-    rast_break_at = 3
-    vect_break_at = 1
+    rast_break_at = None
+    vect_break_at = None
 
     missing_az_vectors = list()
     missing_az_rasters = list()
@@ -285,7 +285,7 @@ def run(
             vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
 
             logger.info(f'Processing zonal stats for raster {rds_id} and {vds_id} ')
-            if not cache_stat_results:
+            if not alternative_path:
                 stat_result = zonal_stats(raster_path_or_ds=stdz_rds, vector_path_or_ds=vds, band=band)
             else:
                 srf = os.path.join(alternative_path, f'{vds_id}_{rds_id}_stats.json')
@@ -331,6 +331,7 @@ def run(
                     '-overwrite'
 
                 ]
+                logger.debug(f'Exporting {vds_path} to GeoJSON {vector_geojson_path}')
                 geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
                                                    options=' '.join(geojson_opts)
                                                    )
@@ -341,10 +342,10 @@ def run(
                 if not os.path.exists(out_mvt_dir_path):
                     util.mkdir_recursive(out_mvt_dir_path)
 
-                res = util.run_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
-                                          minzoom=0, maxzoom=12,
-                                          output_mvt_dir_path=out_mvt_dir_path
-                                          )
+                res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
+                                                  minzoom=0, maxzoom=12,
+                                                  output_mvt_dir_path=out_mvt_dir_path
+                                                  )
 
 
                 #3 remove the new column from vds
@@ -379,7 +380,7 @@ def run(
                     ]
                     if os.path.exists(vector_geojson_path):
                         os.remove(vector_geojson_path)
-
+                    logger.debug(f'Exporting {vds_path} to GeoJSON {vector_geojson_path}')
                     geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
                                          options=' '.join(geojson_opts),
 
@@ -392,11 +393,11 @@ def run(
                     if not os.path.exists(out_mvt_dir_path):
                         util.mkdir_recursive(out_mvt_dir_path)
 
-                    res = util.run_tippecanoe(  src_geojson_file=vector_geojson_path, layer_name=vds_id,
-                                                minzoom=0, maxzoom=12,
-                                                output_mvt_dir_path=out_mvt_dir_path
+                    res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
+                                                      minzoom=0, maxzoom=12,
+                                                      output_mvt_dir_path=out_mvt_dir_path
 
-                                            )
+                                                      )
 
                     mvt_folder_paths[vds_id] = res
                     #2 deallocate
@@ -477,7 +478,7 @@ def main():
 
     ##### EXAMPLE ######################
     #csv_config_blob_path = 'config'
-    #sas_url = 'https://undpngddlsgeohubdev01.blob.core.windows.net/sids?sp=racwdl&st=2022-01-06T21:09:27Z&se=2032-01-07T05:09:27Z&spr=https&sv=2020-08-04&sr=c&sig=XtcP1UUnboo7gSVHOXeTbUt0g%2FSV2pxG7JVgmZ8siwo%3D'
+
     # run(
     #     raster_layers_csv_blob='config/attribute_list_updated.csv',
     #     vector_layers_csv_blob='config/vector_list.csv',

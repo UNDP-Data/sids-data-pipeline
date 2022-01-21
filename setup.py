@@ -5,7 +5,7 @@ setuptools.setup(
     version="1.0.0",
     author="Ioan Ferencik",
     author_email="ioan.ferencik@undp.org",
-    description="A GDAL based geospatial data processing pipeline for SIDS project.",
+    description="A GDAL based geo-spatial data processing pipeline for UNDP SIDS project.",
     #long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://gitlab.solargis.com/sat/idownloader",
@@ -19,7 +19,9 @@ setuptools.setup(
     ],
     install_requires=[
         'azure-storage-blob',
-        'pygeoprocessing==2.3.2'
+        'pygeoprocessing==2.3.2',
+        'aiohttp'
+
 
     ],
 

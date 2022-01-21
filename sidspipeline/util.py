@@ -202,77 +202,46 @@ rm -rf out/mvt;docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm
 '''
 
 
-def run_tippecanoe(
+def export_with_tippecanoe(
 
         src_geojson_file=None,
         layer_name=None,
         minzoom=None,
         maxzoom=None,
         output_mvt_dir_path=None,
-        work_dir='/work',
         timeout=600
     ):
 
     """
+    Export a GeoJSON into MVT using tippecanoe
 
-    :param src_geojson_file:
-    :param layer_name:
-    :param minzoom:
-    :param maxzoom:
-    :param output_mvt_dir_path:
-    :param work_dir:
+    :param src_geojson_file: str, the file to be exported
+    :param layer_name: str, the name to be asigne dto the layer
+    :param minzoom: int
+    :param maxzoom: int
+    :param output_mvt_dir_path: str, the folder where the tilers will be exported
+
     :return:
     """
-    # print('tipecanoe -w=/work -v /data/sids/tmp/test/out:/work klokantech/tippecanoe tippecanoe /work/json/admin0.geojson '
-    #       '-l admin0 -e /work/tiles/admin0  -Z 0 -z 12 --allow-existing --no-feature-limit --no-tile-size-limit')
-
-    '''
-        to try and make created tiles 
-        --mount type=bind,source=/etc/passwd,target=/etc/passwd,readonly --mount type=bind,source=/etc/group,target=/etc/group,readonly -u $(id -u $USER):$(id -g $USER)
 
 
-    '''
-    print(src_geojson_file)
-    print(output_mvt_dir_path)
     logger.info(f'Exporting {layer_name} from {src_geojson_file} to MVT')
 
-    if not output_mvt_dir_path.endswith(os.path.sep):
-        output_mvt_dir_path = f'{output_mvt_dir_path}/'
+
+    tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {output_mvt_dir_path} ' \
+                        f'-z {maxzoom} -Z {minzoom} --allow-existing --no-feature-limit --no-tile-size-limit ' \
+                        f'-f {src_geojson_file}'
 
 
-    bind_dir = os.path.commonpath([output_mvt_dir_path, src_geojson_file])
-    if not bind_dir:
-        raise Exception(f'{output_mvt_dir_path} and {src_geojson_file} need to share a common path')
-    if not bind_dir.endswith(os.path.sep):
-        bind_dir = f'{bind_dir}/'
 
-    rel_out_mvt_dir = output_mvt_dir_path.split(bind_dir)[-1]
-    rel_geojson = src_geojson_file.split(bind_dir)[-1]
-
-    container_mvt_dir = os.path.join(work_dir,rel_out_mvt_dir, layer_name)
-    container_geojson = os.path.join(work_dir,rel_geojson)
-
-    # existing_mvt_folder = os.path.join(output_mvt_dir_path, layer_name)
-    # if os.path.exists(existing_mvt_folder):shutil.rmtree(existing_mvt_folder)
-
-    #docker_tippecanoe_cmd =  f'docker run --rm -w {work_dir} --name tipecanoe -v {bind_dir}:{work_dir} klokantech/tippecanoe '
-    docker_tippecanoe_cmd = ''
-    tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {container_mvt_dir} ' \
-                        f'-z {maxzoom} -Z {minzoom} --allow-existing --no-feature-limit --no-tile-size-limit -f {container_geojson}'
-
-    cmd = f'{docker_tippecanoe_cmd}{tippecanoe_cmd}'
-    print(cmd)
-    # docker_tipecanoe_cmd = f'/usr/bin/docker run --rm  --name tipecanoe klokantech/tippecanoe '
-    #docker_tipecanoe_cmd = f'ls -h'
-
-    with subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+    with subprocess.Popen([tippecanoe_cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
 
         proc.poll()
         try:
             outs, errs = proc.communicate(timeout=timeout)
 
         except subprocess.TimeoutExpired:
-            logger.error(f'{cmd} has timeout out after {timeout} seconds' )
+            logger.error(f'{tippecanoe_cmd} has timeout out after {timeout} seconds' )
             proc.kill()
             outs, errs = proc.communicate()
         except Exception as e:
