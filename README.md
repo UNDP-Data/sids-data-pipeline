@@ -21,18 +21,18 @@ either as a command line argument or an env. variable SAS_SIDS_CONTAINER can be 
 ### 2. Processing
 
 
-######        1. Standardization
+####        1. Standardization
 
 Ensures all data is brought to a common set of specs:
     a) ESPG:4326 projection
     b) clipped to lonmin=-180, lonmax=180, latmin=-35, latmax=35
 
-######        2. Zonal stats
+####        2. Zonal stats
 
 Zonal statistics (mode and mean) are computed for each feature in a  
 given vector from every available raster
 
-######        3. Export to MVT using tippecanoe
+####        3. Export to MVT using tippecanoe
 
 The results from zonal stats are added to the vector geometries in each  
 layer in attribute columns. Depending on the provided arguments the  
@@ -41,8 +41,8 @@ created for every raster layer. Then the MVT are exported using tippecanoe.
 
 
 ### 3. Upload to Azure blob
-    In the last ste the whole folder that contains the MVT files is uploded asynchronously to an Azure Blob container
-    Optionally the fodler can be also removed
+ In the last step the whole folder that contains the MVT files is uploded  
+ asynchronously to an Azure Blob container. Optionally the fodler can be also removed
 
 
 
