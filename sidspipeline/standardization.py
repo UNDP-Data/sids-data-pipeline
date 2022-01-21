@@ -96,7 +96,7 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
         #gdal_translate -r nearest -a_srs EPSG:4326 -projwin_srs '+proj=longlat +datum=WGS84 +pm=0 +over' -projwin -180 30 180 -30 -co "TILED=YES" -co "COMPRESS=LZW" -b 1  GDP_PPP_30arcsec_v3_fixed.tif GDP_PPP_30arcsec_v3.tif
 
         ce = clip_xmin, clip_ymax, clip_xmax, clip_ymin
-        logger.info(f'Clipping {src_blob_path} using {ce}')
+        logger.info(f'Clipping {src_blob_path} with bbox: {ce}')
         options = gdal.TranslateOptions(format=format,
                                         creationOptions=['COMPRESS=LZW', "TILED=YES"],
                                         projWin=ce,

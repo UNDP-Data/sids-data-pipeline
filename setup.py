@@ -20,7 +20,8 @@ setuptools.setup(
     install_requires=[
         'azure-storage-blob',
         'pygeoprocessing==2.3.2',
-        'aiohttp'
+        'aiohttp',
+        'tqdm'
 
 
     ],

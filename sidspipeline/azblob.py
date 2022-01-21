@@ -5,6 +5,8 @@ import logging
 import os
 import time
 import asyncio
+from sidspipeline.util import slicer, count
+from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
@@ -161,7 +163,7 @@ async def upload_file(container_client_instance=None, src=None, dst_blob_name=No
         blob_client = await container_client_instance.upload_blob(name=dst_blob_name, data=data,
                                                         blob_type='BlockBlob', overwrite=overwrite,
                                                         max_concurrency=max_concurrency)
-        logger.info(f'{src} was uploaded as {dst_blob_name}')
+        logger.debug(f'{src} was uploaded as {dst_blob_name}')
         return blob_client, src
 
 
@@ -221,7 +223,7 @@ async def download_file(container_client_instance=None, blob_name=None, dst_file
 
 
 
-@atimeit
+
 async def folder2azureblob(container_client_instance=None, src_folder=None, dst_blob_name=None,
                             overwrite=False, max_concurrency=8, timeout=None
                            ):
@@ -243,37 +245,49 @@ async def folder2azureblob(container_client_instance=None, src_folder=None, dst_
     assert len(src_folder)>1, f'src_folder={src_folder} is invalid'
 
 
-    ftrs = list()
+
     try:
         async with container_client_instance:
             prefix = os.path.split(src_folder)[-1] if dst_blob_name is None else dst_blob_name
+            r = scantree(src_folder)
+            nfiles = count(r)
+            nchunks = nfiles//100 + 1
+            n = 0
+            r = scantree(src_folder)
+            with tqdm(total=nchunks, desc="Uploading ... ", initial=0, unit_scale=True,
+                      colour='green') as pbar:
+                for chunk in slicer(r,100):
+                    ftrs = list()
+                    #logger.info(f'Uploading file chunk no {n} from {nchunks} - {n / nchunks * 100:.2f}%')
+                    await asyncio.sleep(1)
+                    for local_file in chunk:
 
-            for local_file in scantree(src_folder):
-                if not local_file.is_file():continue
-                blob_path = os.path.join(prefix, os.path.relpath(local_file.path, src_folder))
-                #print(e.path, blob_path)
-                fut = asyncio.ensure_future(
-                    upload_file(container_client_instance=container_client_instance,
-                                        src=local_file.path, dst_blob_name=blob_path, overwrite=overwrite,
-                                        max_concurrency=max_concurrency)
-                )
-                ftrs.append(fut)
+                        if not local_file.is_file():continue
+                        blob_path = os.path.join(prefix, os.path.relpath(local_file.path, src_folder))
+                        #print(e.path, blob_path)
+                        fut = asyncio.ensure_future(
+                            upload_file(container_client_instance=container_client_instance,
+                                                src=local_file.path, dst_blob_name=blob_path, overwrite=overwrite,
+                                                max_concurrency=max_concurrency)
+                        )
+                        ftrs.append(fut)
 
 
-            done, pending = await asyncio.wait(ftrs, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
-            results = await asyncio.gather(*done, return_exceptions=True)
-            for res in results:
-                if type(res) == tuple:
-                    blob_client, file_path_to_upload = res
-                    logger.info(f'{file_path_to_upload} was uploaded successfully to {blob_client.blob_name}')
-                else: #error
-                    logger.error(f'{file_path_to_upload} was not uploaded successfully to {blob_client.blob_name}')
-                    logger.error(res)
 
-            for failed in pending:
-                blob_client, file_path_to_upload =  await failed
-                logger.info(f'Uploading {file_path_to_upload} to {container_client_instance.url} has timed out.')
+                    done, pending = await asyncio.wait(ftrs, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
+                    results = await asyncio.gather(*done, return_exceptions=True)
+                    for res in results:
+                        if type(res) == tuple:
+                            blob_client, file_path_to_upload = res
+                        else: #error
+                            logger.error(f'{file_path_to_upload} was not uploaded successfully to {blob_client.blob_name}')
+                            logger.error(res)
 
+                    for failed in pending:
+                        blob_client, file_path_to_upload =  await failed
+                        logger.debug(f'Uploading {file_path_to_upload} to {container_client_instance.url} has timed out.')
+                    pbar.update(1)
+                    n+=1
     except Exception as err:
         logger.error(f'Failed to upload {src_folder} to {container_client_instance.url}')
         raise

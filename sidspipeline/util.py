@@ -3,7 +3,7 @@ import logging
 import time
 from osgeo import gdal, gdalconst
 import subprocess
-
+import itertools
 logger = logging.getLogger(__name__)
 
 
@@ -86,7 +86,25 @@ def mkdir_recursive(path):
     if not os.path.exists(path):
         os.mkdir(path)
 
+def slicer(iterable=None, n=None):
+    """
+    Chunked access by n items to an iterator
+    :param n:
+    :param iterable:
+    :return:
+    """
+    it = iter(iterable)
+    while True:
+        chunk = tuple(itertools.islice(it, n))
+        if not chunk:
+            return
+        yield chunk
 
+def count(iter):
+    try:
+        return len(iter)
+    except TypeError:
+        return sum(1 for _ in iter)
 
 def fetch_vector_from_azure(blob_path=None, client_container=None,alternative_path=None ):
     """
@@ -225,10 +243,10 @@ def export_with_tippecanoe(
     """
 
 
-    logger.info(f'Exporting {layer_name} from {src_geojson_file} to MVT')
 
-
-    tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {output_mvt_dir_path} ' \
+    out_dir = os.path.join(output_mvt_dir_path,layer_name)
+    logger.info(f'Exporting {src_geojson_file} to {out_dir}')
+    tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {out_dir} ' \
                         f'-z {maxzoom} -Z {minzoom} --allow-existing --no-feature-limit --no-tile-size-limit ' \
                         f'-f {src_geojson_file}'
 

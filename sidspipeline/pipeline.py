@@ -82,7 +82,7 @@ def add_field_to_vector(src_ds=None, stats_dict = None, stat_func='mean', field_
 
 
 
-def remove_filed_from_vector(src_ds=None, field_name=None):
+def remove_field_from_vector(src_ds=None, field_name=None):
     """
     Remove filed_name from src_ds
     :param src_ds: instance of gdal.Dataset or ogr.DastaSource
@@ -152,22 +152,25 @@ def run(
     assert out_vector_path not in ('', None), f'Invalid out_vector_path={out_vector_path}'
 
 
-    per = 'vector' if aggregate_vect else 'raster'
+    per = 'vector' if aggregate_vect is True else 'raster'
 
-    logger.info(f'Going to store vector tiles per {per}')
+    logger.info(f'Going to compute and store vector tiles per {per}')
 
     vsi_vect_paths = dict()
     vsiaz_rast_paths = dict()
     mvt_folder_paths =dict()
 
     # used to stop parsing all data during deve;
-    rast_break_at = None
-    vect_break_at = None
+    rast_break_at = 1
+    vect_break_at = 1
 
     missing_az_vectors = list()
     missing_az_rasters = list()
+    cname = None
+    failed = list()
     # make a sync container client
     with ContainerClient.from_container_url(container_url=sas_url) as c:
+        cname = c.container_name
 
         vector_csv_stream = c.download_blob(vector_layers_csv_blob)
 
@@ -279,27 +282,33 @@ def run(
     for rds_id, tp in vsiaz_rast_paths.items():
         vsiaz_rds_path, band = tp
         # 1 STANDARDIZE
-        stdz_rds = standardize(src_blob_path=vsiaz_rds_path, band=band, alternative_path=alternative_path)
-
+        try:
+            stdz_rds = standardize(src_blob_path=vsiaz_rds_path, band=band, alternative_path=alternative_path)
+        except Exception as stdze:
+            logger.error(f'Failed to standardize {vsiaz_rds_path}:{band}. \n {stdze}. Skipping')
+            failed.append(vsiaz_rds_path)
         for vds_id, vds_path in vsi_vect_paths.items():
             vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
 
             logger.info(f'Processing zonal stats for raster {rds_id} and {vds_id} ')
-            if not alternative_path:
-                stat_result = zonal_stats(raster_path_or_ds=stdz_rds, vector_path_or_ds=vds, band=band)
-            else:
-                srf = os.path.join(alternative_path, f'{vds_id}_{rds_id}_stats.json')
-                if not os.path.exists(srf) or os.path.getsize(srf) == 0:
-
+            try:
+                if not alternative_path:
                     stat_result = zonal_stats(raster_path_or_ds=stdz_rds, vector_path_or_ds=vds, band=band)
-                    with open(srf, 'w') as out:
-                        json.dump(stat_result, out)
-
                 else:
-                    logger.info(f'Reusing zonal stats from {srf}')
-                    with open(srf) as infl:
-                        stat_result = json.load(infl)
+                    srf = os.path.join(alternative_path, f'{vds_id}_{rds_id}_stats.json')
+                    if not os.path.exists(srf) or os.path.getsize(srf) == 0:
 
+                        stat_result = zonal_stats(raster_path_or_ds=stdz_rds, vector_path_or_ds=vds, band=band)
+                        with open(srf, 'w') as out:
+                            json.dump(stat_result, out)
+
+                    else:
+                        logger.info(f'Reusing zonal stats from {srf}')
+                        with open(srf) as infl:
+                            stat_result = json.load(infl)
+            except Exception as zse:
+                logger.error(f'Failed to compute zonal stats for {vsiaz_rds_path}:{band} <> {vds_path}. \n {stdze}. Skipping')
+                failed.append(vsiaz_rds_path)
 
 
 
@@ -314,6 +323,7 @@ def run(
 
 
             if not aggregate_vect:
+
                 #1 convert vds to GeoJSON as rds_id/vds_id.json
                 vector_geojson_path = os.path.join(vector_json_dir, f'{rds_id}_{vds_id}.geojson')
                 if os.path.exists(vector_geojson_path):
@@ -331,7 +341,7 @@ def run(
                     '-overwrite'
 
                 ]
-                logger.debug(f'Exporting {vds_path} to GeoJSON {vector_geojson_path}')
+                logger.info(f'Exporting {vds_path} to {vector_geojson_path}')
                 geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
                                                    options=' '.join(geojson_opts)
                                                    )
@@ -349,7 +359,7 @@ def run(
 
 
                 #3 remove the new column from vds
-                remove_filed_from_vector(src_ds=vds,field_name=rds_id)
+                remove_field_from_vector(src_ds=vds, field_name=rds_id)
 
                 # add to results for upload
                 if rds_id in mvt_folder_paths:
@@ -380,7 +390,7 @@ def run(
                     ]
                     if os.path.exists(vector_geojson_path):
                         os.remove(vector_geojson_path)
-                    logger.debug(f'Exporting {vds_path} to GeoJSON {vector_geojson_path}')
+                    logger.info(f'Exporting {vds_path} to  {vector_geojson_path}')
                     geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
                                          options=' '.join(geojson_opts),
 
@@ -415,7 +425,7 @@ def run(
     if os.path.exists(geojson_root_folder):
         shutil.rmtree(geojson_root_folder)
 
-
+    logger.info(f'Going to upload vector tiles from {mvt_root_folder} to container {cname}/{upload_blob_path}')
     asyncio.run(
         upload_mvts(
             sas_url=sas_url,
@@ -426,7 +436,10 @@ def run(
     )
     missing_files = missing_az_vectors+missing_az_rasters
     for missing_file in missing_files:
-        logger.error(f'{missing_file} could not be found on MS Azure and was not processed')
+        logger.error(f'{missing_file} could not be found on MS Azure and was not processed.')
+
+    for fail in failed:
+        logger.error(f'{fail} was not processed.')
 
     if remove_tiles_after_upload:
         shutil.rmtree(mvt_root_folder)
@@ -492,6 +505,13 @@ def main():
     ##### EXAMPLE ######################
 
     import argparse as ap
+    from urllib.parse import urlparse
+
+
+    def boolean_string(s):
+        if s not in {'False', 'True'}:
+            raise ValueError('Not a valid boolean string')
+        return s == 'True'
 
 
     class HelpParser(ap.ArgumentParser):
@@ -528,11 +548,11 @@ def main():
     arg_parser.add_argument('-ag', '--aggregate_vect',
                             help='determines if the zonal statistics will be accumulated into the vector layers as '
                                  'columns in the attr table. If False, a new vector layer/vector tile will be created '
-                                 'for every combination of raster and vector layers', type=bool,
+                                 'for every combination of raster and vector layers', type=boolean_string,
                             default=True
                             )
     arg_parser.add_argument('-rmt', '--remove_tiles_after_upload',
-                            help='if the tiles should be removed after upload', type=bool,
+                            help='if the tiles should be removed after upload', type=boolean_string,
                             default=True
                             )
     arg_parser.add_argument('-ap', '--alternative_path',
@@ -547,6 +567,7 @@ def main():
 
     # parse and collect args
     args = arg_parser.parse_args()
+
 
     raster_layers_csv_blob = args.raster_layers_csv_blob
     vector_layers_csv_blob = args.vector_layers_csv_blob
@@ -570,6 +591,16 @@ def main():
 
     # use env variable SAS_SIDS_CONTAINER
     sas_url = sas_url or os.environ.get('SAS_SIDS_CONTAINER', None)
+
+    parsed = urlparse(sas_url)
+    #AZURE_SAS and AZURE_STORAGE_SAS_TOKEN
+    azure_storage_account = parsed.netloc.split('.')[0]
+    azure_sas_token = parsed.query
+
+    os.environ['AZURE_STORAGE_ACCOUNT'] = azure_storage_account
+    os.environ['AZURE_STORAGE_SAS_TOKEN'] = azure_sas_token
+    os.environ['AZURE_SAS'] = azure_sas_token
+
 
     run(
         raster_layers_csv_blob=raster_layers_csv_blob,
