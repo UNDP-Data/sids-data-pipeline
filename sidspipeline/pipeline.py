@@ -154,15 +154,15 @@ def run(
 
     per = 'vector' if aggregate_vect is True else 'raster'
 
-    logger.info(f'Going to compute and store vector tiles per {per}')
+    logger.info(f'Going to compute and store vector tiles for every {per}')
 
     vsi_vect_paths = dict()
     vsiaz_rast_paths = dict()
     mvt_folder_paths =dict()
 
     # used to stop parsing all data during deve;
-    rast_break_at = 1
-    vect_break_at = 1
+    rast_break_at = None
+    vect_break_at = None
 
     missing_az_vectors = list()
     missing_az_rasters = list()
