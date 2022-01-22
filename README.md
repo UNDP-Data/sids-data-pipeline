@@ -82,6 +82,7 @@ where value is an full Azure SAS URL
 
 ### 2. Download the docker image
 
+
 ```bash
     
     docker pull ghcr.io/undp-data/sids-data-pipeline:latest
