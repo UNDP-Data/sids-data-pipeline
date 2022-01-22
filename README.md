@@ -14,8 +14,8 @@ The data pipeline consists of three fucntional blocks
 
 #### 1. Sources
 
-The input consists of paths from where the raster and vector CSV spec files are downloaded. Obviously an Azure container SAS  
-url is required to access the CSV files. This can be provided either as a command line argument or an env. variable called  
+The input consists of paths from where the raster and vector CSV spec files are downloaded. Obviously an Azure container SAS
+url is required to access the CSV files. This can be provided either as a command line argument or an env. variable called
  `SAS_SIDS_CONTAINER` can be created for the same purpose.
 
 ### 2. Processing
@@ -33,27 +33,27 @@ Zonal statistics (mode and mean) are computed for each feature in a given vector
 
 ####        3. Export to MVT using tippecanoe
 
-The results from zonal stats are added to the vector geometries in each  layer in attribute columns. Depending on the provided  
-arguments the attributes are either added to the same vector layer or new layers are created for every raster layer.  
+The results from zonal stats are added to the vector geometries in each  layer in attribute columns. Depending on the provided
+arguments the attributes are either added to the same vector layer or new layers are created for every raster layer.
 Next the MVT are exported using tippecanoe.
 
 
 ### 3. Upload to Azure blob
-In the last step the whole folder that contains the MVT files is uploded asynchronously to the Azure Blob container.  
+In the last step the whole folder that contains the MVT files is uploded asynchronously to the Azure Blob container.
 Optionally the MVT folder can be also removed for the local file system.
 
 
 
 ## Notes
 
-Originally the plan was to use GDAL to do the whole job but this was a no go because GDAL could not translate  some of the  
-vector layers to MVT format. Apparently the admin layers contain features whose bounding box spans accross the whole world.  
+Originally the plan was to use GDAL to do the whole job but this was a no go because GDAL could not translate  some of the
+vector layers to MVT format. Apparently the admin layers contain features whose bounding box spans accross the whole world.
 The GDAL MVT driver can not handle these kind of of geometries and was getting struck in infinite loops. An [issue](https://github.com/OSGeo/gdal/issues/5109)
 was submitted and if this will be resolved we could switch to GDAL entirely to do the job.
 
 An alternative solution is to do some pre-processing on the original vector data as to ensure the GDAL will be able to process it.
 
-As a result we resorted to using tippecanoe to export the data to MVT. For practical purposes, we used the dockerized version of tippecanoe because  
+As a result we resorted to using tippecanoe to export the data to MVT. For practical purposes, we used the dockerized version of tippecanoe because
 it is relatively straightforward to set up.
 
 
@@ -73,7 +73,7 @@ The pipeline is deployed as a Docker image and this means [Docker](https://www.d
 
 ### 1. Create an .env file holding the Azure credentials
 
-The SIDS data is stored in an Azure blob container so a SAS  using your favourite editor create a .env text file and add  
+The SIDS data is stored in an Azure blob container so a SAS  using your favourite editor create a .env text file and add
 `SAS_SIDS_CONTAINER=url` where url is a full Azure SAS URL.
 
 
@@ -240,7 +240,7 @@ would be generated for each input raster
                 └── 9
 
   ```
-  - "-ap=/data/sids/tmp/test" - store the intermediary (downloaded from Azure) geo-spatial data in this folder and reuse it on next iterations. TYhis hould be used for
+  - "-ap=/data/sids/tmp/test" - store the intermediary (downloaded from Azure) geo-spatial data in this folder and reuse it on next iterations. This should be used for
   testing and development only or is working with the pipeline on a machine with slow internet connection
 
 
