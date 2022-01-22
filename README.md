@@ -64,9 +64,21 @@ we used the dockerized version of tippecanoe as it is relatively straightforward
 
 
 ## Hands on
-docker needs to be installed
+The pipeline is deployed as a Docker image.
 
 ### 1. Create an .env file holding the Azure credentials
+```bash
+    mkdir sidspipeline
+    cd sidspipeline
+       
+```
+using you favourite editor create a .env text file and add
+
+SAS_SIDS_CONTAINER=value
+
+where value is an full Azure SAS URL
+
+
 
 ### 2. Download the docker image
 
