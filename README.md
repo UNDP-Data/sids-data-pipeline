@@ -241,7 +241,7 @@ would be generated for each input raster
                 └── 9
 
   ```
-  - "-ap=/data/sids/tmp/test" - store the intermediary (downloaded from Azure) geospatial data in this folder and reuse it on next iterations. TYhis hould be used for
+  - "-ap=/data/sids/tmp/test" - store the intermediary (downloaded from Azure) geo-spatial data in this folder and reuse it on next iterations. TYhis hould be used for
   testing and development only or is workinbg with the pipeline on a machine with slow internet connection
 
 
