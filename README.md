@@ -242,7 +242,7 @@ would be generated for each input raster
 
   ```
   - "-ap=/data/sids/tmp/test" - store the intermediary (downloaded from Azure) geo-spatial data in this folder and reuse it on next iterations. TYhis hould be used for
-  testing and development only or is workinbg with the pipeline on a machine with slow internet connection
+  testing and development only or is working with the pipeline on a machine with slow internet connection
 
 
 ## Development
