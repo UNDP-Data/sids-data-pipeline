@@ -121,6 +121,7 @@ def run(
             root_mvt_folder_name='tiles',
             root_geojson_folder_name = 'json',
             alternative_path=None,
+            process_one=True
 
 
     ):
@@ -146,6 +147,7 @@ def run(
             inside the out_vector_path folder
     :param alternative_path: str, full path to a folder where the incoming thata that is downlaoded will be stored and
             cached. Used during developemnt
+    :param: process_one, default=True, if True the pipeline will stop after collecting one ratser and vector file
     :return:
     """
     assert raster_layers_csv_blob not in ('')
@@ -160,9 +162,13 @@ def run(
     vsiaz_rast_paths = dict()
     mvt_folder_paths =dict()
 
-    # used to stop parsing all data during deve;
-    rast_break_at = None
-    vect_break_at = None
+    # used to stop parsing all data during devel
+    if process_one:
+        rast_break_at = 1
+        vect_break_at = 1
+    else:
+        rast_break_at = None
+        vect_break_at = None
 
     missing_az_vectors = list()
     missing_az_rasters = list()
@@ -561,6 +567,9 @@ def main():
                             help='Abs path to a folder where input data can be cached', type=str
                             )
 
+    arg_parser.add_argument('-pone', '--process_one',
+                            help='if True the pipeline will stop after collecting one ratser and vector file', type=boolean_string
+                            )
 
     arg_parser.add_argument('-d', '--debug',
                             help='debug mode on/off', type=bool,
@@ -580,6 +589,7 @@ def main():
     aggregate_vect = args.aggregate_vect
     debug = args.debug
     alternative_path=args.alternative_path
+    process_one = args.process_one
 
     rlogger = logging.getLogger()
     # remove the default stream handler and add the new on too it.
@@ -612,7 +622,8 @@ def main():
         aggregate_vect=aggregate_vect,
         upload_blob_path=upload_blob_path,
         remove_tiles_after_upload=remove_tiles_after_upload,
-        alternative_path=alternative_path
+        alternative_path=alternative_path,
+        process_one=process_one
 
 
        )
