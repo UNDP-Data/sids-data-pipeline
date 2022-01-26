@@ -287,6 +287,7 @@ def run(
         except Exception as stdze:
             logger.error(f'Failed to standardize {vsiaz_rds_path}:{band}. \n {stdze}. Skipping')
             failed.append(vsiaz_rds_path)
+            continue
         for vds_id, vds_path in vsi_vect_paths.items():
             vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
 
@@ -307,8 +308,9 @@ def run(
                         with open(srf) as infl:
                             stat_result = json.load(infl)
             except Exception as zse:
-                logger.error(f'Failed to compute zonal stats for {vsiaz_rds_path}:{band} <> {vds_path}. \n {stdze}. Skipping')
+                logger.error(f'Failed to compute zonal stats for {vsiaz_rds_path}:{band} <> {vds_path}. \n {zse}. Skipping')
                 failed.append(vsiaz_rds_path)
+                continue
 
 
 
