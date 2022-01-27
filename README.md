@@ -65,10 +65,9 @@ The pipeline is deployed as a Docker image and this means [Docker](https://www.d
 
 
 ```bash
-    #start by creating a folder
-    mkdir sidspipeline
-    cd sidspipeline
-       
+#start by creating a folder
+mkdir sidspipeline
+cd sidspipeline       
 ```
 
 ### 1. Create an .env file holding the Azure credentials
@@ -82,10 +81,7 @@ The SIDS data is stored in an Azure blob container so a SAS  using your favourit
 
 
 ```bash
-    
-    docker pull ghcr.io/undp-data/sids-data-pipeline:latest
-
-     
+docker pull ghcr.io/undp-data/sids-data-pipeline:latest     
 ```
 
 ### 3. run the pipeline
@@ -104,7 +100,7 @@ Here we are instructing docker to deploy a container using the previously pulled
 - is named sidsdatapipeline - this is useful to be able to identify the container in case it needs to be stopped
 - is using/passed the env variables defined in the .env file through `--env-file` arg
 - is mounting local `/data` folder as `/data` inside the container
-- is immediately removed `--rm` after the  datat pipeline script finishes
+- is immediately removed `--rm` after the  data pipeline script finishes
 
 
 The result of the above command is :
@@ -112,11 +108,11 @@ The result of the above command is :
 ```bash
 docker run  -ti --rm --name=sidsdatapipeline --env-file .env -v /data:/data ghcr.io/undp-data/sids-data-pipeline:latest sidspipeline
 
+usage: sidspipeline [-h] -rb RASTER_LAYERS_CSV_BLOB [-vb VECTOR_LAYERS_CSV_BLOB] [-su SAS_URL] [-ov OUT_VECTOR_PATH] [-ub UPLOAD_BLOB_PATH] [-ag AGGREGATE_VECT]
+                    [-rm REMOVE_TILES_AFTER_UPLOAD] [-cf CACHE FOLDER] [-sm SAMPLE_MODE] [-d DEBUG]
 
-usage: sidspipeline [-h] -rb RASTER_LAYERS_CSV_BLOB [-vb VECTOR_LAYERS_CSV_BLOB] [-su SAS_URL] [-ov OUT_VECTOR_PATH] [-ub UPLOAD_BLOB_PATH] [-ag AGGREGATE_VECT] [-rmt REMOVE_TILES_AFTER_UPLOAD] [-ap ALTERNATIVE_PATH] [-d DEBUG]
-
-Run the SIDS data pipeline. The pipeline computes zonal stats for a number of vector layers from a number of raster layers. The results are converted into MapBox Vector Tile format and uploaded to an Azure Blob storage container. The
-specs for the raster and vector files are fetched from CSV files stored in same Azure Blob storage.
+Run the SIDS data pipeline. The pipeline computes zonal stats for a number of vector layers from a number of raster layers. The results are converted into MapBox Vector Tile format
+and uploaded to an Azure Blob storage container. The specs for the raster and vector files are fetched from CSV files stored in same Azure Blob storage.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -131,14 +127,16 @@ optional arguments:
   -ub UPLOAD_BLOB_PATH, --upload_blob_path UPLOAD_BLOB_PATH
                         relative path (to the container) where the MVT data will be copied (default: None)
   -ag AGGREGATE_VECT, --aggregate_vect AGGREGATE_VECT
-                        determines if the zonal statistics will be accumulated into the vector layers as columns in the attr table. If False, a new vector layer/vector tile will be created for every combination of raster and vector
-                        layers (default: True)
-  -rmt REMOVE_TILES_AFTER_UPLOAD, --remove_tiles_after_upload REMOVE_TILES_AFTER_UPLOAD
+                        determines if the zonal statistics will be accumulated into the vector layers as columns in the attr table. If False, a new vector layer/vector tile will be
+                        created for every combination of raster and vector layers (default: True)
+  -rm REMOVE_TILES_AFTER_UPLOAD, --remove_tiles_after_upload REMOVE_TILES_AFTER_UPLOAD
                         if the tiles should be removed after upload (default: True)
-  -ap ALTERNATIVE_PATH, --alternative_path ALTERNATIVE_PATH
-                        Abs path to a folder where input data can be cached (default: None)
+  -cf CACHE FOLDER, --cache folder CACHE FOLDER
+                        Abs path to a folder where input data can be cached and reread an next launch (default: None)
+  -sm SAMPLE_MODE, --sample_mode SAMPLE_MODE
+                        if True the pipeline will stop after collecting one raster and vector file (default: False)
   -d DEBUG, --debug DEBUG
-
+                        debug mode on/off (default: False)
 
 ```
 
