@@ -210,7 +210,7 @@ def run(
                         raise ResourceNotFoundError(f'{src_vector_blob_path}')
                     del __
                     vsi_vect_path = util.fetch_vector_from_azure(
-                        blob_path=src_vector_blob_path,
+                        rel_blob_path=src_vector_blob_path,
                         client_container=c,
                         alternative_path=alternative_path
                     )
@@ -290,13 +290,14 @@ def run(
         # 1 STANDARDIZE
         try:
             stdz_rds = standardize(src_blob_path=vsiaz_rds_path, band=band, alternative_path=alternative_path)
+
         except Exception as stdze:
             logger.error(f'Failed to standardize {vsiaz_rds_path}:{band}. \n {stdze}. Skipping')
             failed.append(vsiaz_rds_path)
             continue
         for vds_id, vds_path in vsi_vect_paths.items():
             vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
-
+            logger.info(gdal.Info(vds_path))
             logger.info(f'Processing zonal stats for raster {rds_id} and {vds_id} ')
             try:
                 if not alternative_path:
@@ -316,6 +317,7 @@ def run(
             except Exception as zse:
                 logger.error(f'Failed to compute zonal stats for {vsiaz_rds_path}:{band} <> {vds_path}. \n {zse}. Skipping')
                 failed.append(vsiaz_rds_path)
+                raise
                 continue
 
 
@@ -432,16 +434,16 @@ def run(
     geojson_root_folder = os.path.join(out_vector_path, root_geojson_folder_name)
     if os.path.exists(geojson_root_folder):
         shutil.rmtree(geojson_root_folder)
-
-    logger.info(f'Going to upload vector tiles from {mvt_root_folder} to container {cname}/{upload_blob_path}')
-    asyncio.run(
-        upload_mvts(
-            sas_url=sas_url,
-            src_folder=mvt_root_folder,
-            dst_blob_name=upload_blob_path,
-            timeout=3*60*60 #three hours
-            )
-    )
+    if os.path.exists(mvt_root_folder):
+        logger.info(f'Going to upload vector tiles from {mvt_root_folder} to container {cname}/{upload_blob_path}')
+        asyncio.run(
+            upload_mvts(
+                sas_url=sas_url,
+                src_folder=mvt_root_folder,
+                dst_blob_name=upload_blob_path,
+                timeout=3*60*60 #three hours
+                )
+        )
     missing_files = missing_az_vectors+missing_az_rasters
     for missing_file in missing_files:
         logger.error(f'{missing_file} could not be found on MS Azure and was not processed.')
@@ -559,16 +561,17 @@ def main():
                                  'for every combination of raster and vector layers', type=boolean_string,
                             default=True
                             )
-    arg_parser.add_argument('-rmt', '--remove_tiles_after_upload',
+    arg_parser.add_argument('-rm', '--remove_tiles_after_upload',
                             help='if the tiles should be removed after upload', type=boolean_string,
                             default=True
                             )
-    arg_parser.add_argument('-ap', '--alternative_path',
-                            help='Abs path to a folder where input data can be cached', type=str
+    arg_parser.add_argument('-cf', '--cache folder',
+                            help='Abs path to a folder where input data can be cached and reread an next launch', type=str
                             )
 
-    arg_parser.add_argument('-pone', '--process_one',
-                            help='if True the pipeline will stop after collecting one ratser and vector file', type=boolean_string
+    arg_parser.add_argument('-sm', '--sample_mode',
+                            help='if True the pipeline will stop after collecting one raster and vector file', type=boolean_string,
+                            default=False
                             )
 
     arg_parser.add_argument('-d', '--debug',
@@ -588,14 +591,15 @@ def main():
     out_vector_path = args.out_vector_path
     aggregate_vect = args.aggregate_vect
     debug = args.debug
-    alternative_path=args.alternative_path
-    process_one = args.process_one
+    alternative_path=args.cache_folder
+    process_one = args.sample_mode
 
     rlogger = logging.getLogger()
     # remove the default stream handler and add the new on too it.
     rlogger.handlers.clear()
     rlogger.addHandler(sthandler)
     if debug:
+        os.environ['CPL_DEBUG'] = 'ON'
         rlogger.setLevel(logging.DEBUG)
     else:
         rlogger.setLevel(logging.INFO)

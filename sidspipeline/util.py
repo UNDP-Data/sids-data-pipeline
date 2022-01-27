@@ -4,6 +4,9 @@ import time
 from osgeo import gdal, gdalconst
 import subprocess
 import itertools
+import shlex
+from urllib.parse import urlparse
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,46 +109,43 @@ def count(iter):
     except TypeError:
         return sum(1 for _ in iter)
 
-def fetch_vector_from_azure(blob_path=None, client_container=None,alternative_path=None ):
+def fetch_vector_from_azure(rel_blob_path=None, client_container=None, alternative_path=None):
     """
 
-    :param blob_path:
+    :param rel_blob_path:
     :param client_container:
     :param alternative_path: only for devel
     :return:
     """
-
-    name = os.path.split(blob_path)[-1]
+    parsed = urlparse(client_container.url)
+    blob_full_path = os.path.join(f'{parsed.scheme}://{parsed.netloc}{parsed.path}', rel_blob_path)
+    name = os.path.split(rel_blob_path)[-1]
 
     if alternative_path is not None:
         assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
         dst_shp_path = os.path.join(alternative_path, name)
         if os.path.exists(dst_shp_path):
-            logger.info(f'Reading {blob_path} from {dst_shp_path}')
+            logger.info(f'Reading {blob_full_path} from {dst_shp_path}')
             return dst_shp_path
-        else:
-            logger.info(f'{dst_shp_path} does not exist in {alternative_path}. Going to read from {blob_path}')
 
 
 
-    root = os.path.splitext(blob_path)[0]
+
+    root = os.path.splitext(rel_blob_path)[0]
     rroot, ext = os.path.splitext(name)
     read_path = f'/vsimem/{rroot}{ext}'
 
 
-    try:
-        logger.info(f'Attempting to read {read_path} from RAM ... ')
-        vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
-    except Exception as eee:
-        logger.info(f'Could not fetch {read_path} from RAM. Going to fetch it from {blob_path}')
-        for e in ('.shp', '.shx', '.dbf', '.prj'):
-            vsi_pth = f'/vsimem/{rroot}{e}'
-            remote_pth = f'{root}{e}'
-            strm = client_container.download_blob(remote_pth)
-            v = strm.readall()
-            gdal.FileFromMemBuffer(vsi_pth, v)
-        vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
-        logger.debug(f'{blob_path} was downloaded and stored to {read_path}')
+
+    logger.info(f'Going to fetch {read_path} from  {blob_full_path}')
+    for e in ('.shp', '.shx', '.dbf', '.prj'):
+        vsi_pth = f'/vsimem/{rroot}{e}'
+        remote_pth = f'{root}{e}'
+        strm = client_container.download_blob(remote_pth)
+        v = strm.readall()
+        gdal.FileFromMemBuffer(vsi_pth, v)
+    vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
+    logger.debug(f'{blob_full_path} was downloaded and stored to {read_path}')
 
     if alternative_path is not None:
         assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
@@ -251,23 +251,30 @@ def export_with_tippecanoe(
                         f'-f {src_geojson_file}'
 
 
-
-    with subprocess.Popen([tippecanoe_cmd], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
-
-        proc.poll()
-        try:
-            outs, errs = proc.communicate(timeout=timeout)
-
-        except subprocess.TimeoutExpired:
-            logger.error(f'{tippecanoe_cmd} has timeout out after {timeout} seconds' )
-            proc.kill()
-            outs, errs = proc.communicate()
-        except Exception as e:
-            logger.error(f'{e}')
-            raise
-
-
+    #TODO ADD TIMER
+    with subprocess.Popen(shlex.split(tippecanoe_cmd), stdout=subprocess.PIPE, start_new_session=True) as proc:
+        start = time.time()
+        while proc.poll() is None:
+            output = proc.stdout.readline()
+            if output:
+                logger.info(output.strip())
+            if timeout:
+                if time.time() - start > timeout:
+                    proc.terminate()
+                    raise subprocess.TimeoutExpired(tippecanoe_cmd, timeout=timeout)
         return os.path.join(output_mvt_dir_path, layer_name)
+        # try:
+        #     outs, errs = proc.communicate(timeout=timeout)
+        #
+        # except subprocess.TimeoutExpired:
+        #     logger.error(f'{tippecanoe_cmd} has timeout out after {timeout} seconds' )
+        #     proc.kill()
+        #     outs, errs = proc.communicate()
+        # except Exception as e:
+        #     logger.error(f'{e}')
+        #     raise
+        #
+        # return os.path.join(output_mvt_dir_path, layer_name)
 
 
 

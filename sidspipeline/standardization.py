@@ -87,10 +87,10 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
         #create a VRT to get the desired bands
         vrt_name = dst_blob_name.replace('.tif', '.vrt')
         vrt_path = f'/vsimem/{vrt_name}'
-        src = gdal.Translate(vrt_path, src_ds, bandList=band_list,)
+        src = gdal.Translate(destName=vrt_path, srcDS=src_ds, bandList=band_list,)
 
 
-        res = gdal.Warp(dst_path,src, options=options)
+        res = gdal.Warp(destNameOrDestDS=dst_path,srcDSOrSrcDSTab=src, options=options)
     else:
 
         #gdal_translate -r nearest -a_srs EPSG:4326 -projwin_srs '+proj=longlat +datum=WGS84 +pm=0 +over' -projwin -180 30 180 -30 -co "TILED=YES" -co "COMPRESS=LZW" -b 1  GDP_PPP_30arcsec_v3_fixed.tif GDP_PPP_30arcsec_v3.tif
@@ -104,12 +104,12 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
                                         outputSRS=dst_srs,
                                         bandList=band_list,
                                         resampleAlg=resampling)
-        res = gdal.Translate(dst_path,src_ds, options=options)
+        res = gdal.Translate(destName=dst_path,srcDS=src_ds, options=options)
 
     if alternative_path:
         assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
         dst_path = os.path.join(alternative_path, dst_blob_name)
-        return gdal.Translate(dst_path,res)
+        return gdal.Translate(destName=dst_path,srcDS=res)
 
     return res
 

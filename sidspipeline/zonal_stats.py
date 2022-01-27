@@ -7,7 +7,7 @@ import collections
 import shutil
 import numpy as np
 import time
-
+import uuid
 
 
 logger = logging.getLogger(__name__)
@@ -452,19 +452,29 @@ def zonal_stats(raster_path_or_ds=None, vector_path_or_ds=None, band=None,
 
     """
 
+    #TODO find a more elegant solution
 
 
-    if 'Dataset' in raster_path_or_ds.__class__.__name__:
-        _, raster_file_name = os.path.split(raster_path_or_ds.GetFileList()[0])
-        raster_path = f'/vsimem/{raster_file_name}'
-        gdal.Translate(raster_path,raster_path_or_ds)
+    if hasattr(raster_path_or_ds, 'GetFileList'):
+        files = raster_path_or_ds.GetFileList()
+        if not files:
+            raster_file_name = uuid.uuid1()
+            raster_path = f'/vsimem/{raster_file_name}.vrt'
+            gdal.Translate(raster_path,raster_path_or_ds, format='VRT')
+        else:
+            raster_path = files[0]
     else:
         raster_path = raster_path_or_ds
 
-    if 'DataSource' in vector_path_or_ds.__class__.__name__ or 'Dataset' in vector_path_or_ds.__class__.__name__  :
-        #, vector_file_name = os.path.split(vector_path_or_ds.GetFileList()[0])
-        vector_path = f'/vsimem/{vector_path_or_ds.GetLayer(0).GetName()}'
-        gdal.VectorTranslate(destNameOrDestDS=vector_path,srcDS=vector_path_or_ds)
+    if not isinstance(vector_path_or_ds, str):
+        files = vector_path_or_ds.GetFileList()
+        if not files:
+            vector_file_name = uuid.uuid1()
+            vector_path = f'/vsimem/{vector_file_name}.vrt'
+            gdal.VectorTranslate(destNameOrDestDS=vector_path,srcDS=vector_path_or_ds, format='VRT')
+        else:
+            vector_path = files[0]
+
 
     else:
         vector_path = vector_path_or_ds
