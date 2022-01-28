@@ -131,7 +131,7 @@ optional arguments:
                         created for every combination of raster and vector layers (default: True)
   -rm REMOVE_TILES_AFTER_UPLOAD, --remove_tiles_after_upload REMOVE_TILES_AFTER_UPLOAD
                         if the tiles should be removed after upload (default: True)
-  -cf CACHE FOLDER, --cache folder CACHE FOLDER
+  -cf CACHE_FOLDER, --cache_folder CACHE_FOLDER
                         Abs path to a folder where input data can be cached and reread an next launch (default: None)
   -sm SAMPLE_MODE, --sample_mode SAMPLE_MODE
                         if True the pipeline will stop after collecting one raster and vector file (default: False)
