@@ -565,7 +565,7 @@ def main():
                             help='if the tiles should be removed after upload', type=boolean_string,
                             default=True
                             )
-    arg_parser.add_argument('-cf', '--cache folder',
+    arg_parser.add_argument('-cf', '--cache_folder',
                             help='Abs path to a folder where input data can be cached and reread an next launch', type=str
                             )
 
