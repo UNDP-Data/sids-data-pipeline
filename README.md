@@ -160,7 +160,7 @@ The arguments are more or less self explanatory and match  the structure of the 
         -ov /data/sids/tmp/test1 \
         -ub=vtiles1 \
         -ag=True \
-        -ap=/data/sids/tmp/test
+        -cf=/data/sids/tmp/test
     
     
     # or a one liner
