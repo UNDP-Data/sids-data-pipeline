@@ -297,7 +297,7 @@ def run(
             continue
         for vds_id, vds_path in vsi_vect_paths.items():
             vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
-            logger.info(gdal.Info(vds_path))
+
             logger.info(f'Processing zonal stats for raster {rds_id} and {vds_id} ')
             try:
                 if not alternative_path:
