@@ -246,11 +246,12 @@ def export_with_tippecanoe(
 
     out_dir = os.path.join(output_mvt_dir_path,layer_name)
     logger.info(f'Exporting {src_geojson_file} to {out_dir}')
-    tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {out_dir} ' \
-                        f'-z {maxzoom} -Z {minzoom} --allow-existing --no-feature-limit --no-tile-size-limit ' \
-                        f'-f {src_geojson_file}'
+    # tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {out_dir} ' \
+    #                     f'-z {maxzoom} -Z {minzoom} --allow-existing --no-feature-limit --no-tile-size-limit ' \
+    #                     f'-f {src_geojson_file}'
 
-
+    tippecanoe_cmd = f'tippecanoe -z{maxzoom} --no-tile-compression --no-feature-limit --no-tile-size-limit --output-to-directory={out_dir} {src_geojson_file}'
+    logger.debug(f'running {tippecanoe_cmd}')
     #TODO ADD TIMER
     with subprocess.Popen(shlex.split(tippecanoe_cmd), stdout=subprocess.PIPE, start_new_session=True) as proc:
         start = time.time()
