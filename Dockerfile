@@ -4,7 +4,7 @@ RUN apt-get update \
   && apt-get -y install git build-essential libsqlite3-dev zlib1g-dev python3-pip
 
 RUN python3 -m pip install -U pip
-RUN python3 -m pip install pygeoprocessing
+RUN python3 -m pip install pygeoprocessing==2.3.2
 RUN python3 -m pip install azure-storage-blob
 RUN python3 -m pip install aiohttp
 RUN python3 -m pip install -U numpy
