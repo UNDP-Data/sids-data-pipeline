@@ -121,7 +121,7 @@ def run(
             root_mvt_folder_name='tiles',
             root_geojson_folder_name = 'json',
             alternative_path=None,
-            process_one=True
+            rids=[]
 
 
     ):
@@ -147,7 +147,7 @@ def run(
             inside the out_vector_path folder
     :param alternative_path: str, full path to a folder where the incoming thata that is downlaoded will be stored and
             cached. Used during developemnt
-    :param: process_one, default=True, if True the pipeline will stop after collecting one ratser and vector file
+    :param: rids,
     :return:
     """
     assert raster_layers_csv_blob not in ('')
@@ -160,15 +160,9 @@ def run(
 
     vsi_vect_paths = dict()
     vsiaz_rast_paths = dict()
-    mvt_folder_paths =dict()
 
-    # used to stop parsing all data during devel
-    if process_one:
-        rast_break_at = 1
-        vect_break_at = 1
-    else:
-        rast_break_at = None
-        vect_break_at = None
+
+
 
     missing_az_vectors = list()
     missing_az_rasters = list()
@@ -185,7 +179,7 @@ def run(
             vstr.seek(0)
             vlines = (line.decode('utf-8') for line in vstr.readlines())
             vreader = csv.DictReader(vlines)
-            nv = 0
+
             for csv_vector_row in vreader:
 
                 vid = csv_vector_row['vector_id']
@@ -219,9 +213,8 @@ def run(
                     continue
 
                 vsi_vect_paths[vid] = vsi_vect_path
-                nv+=1
-                if nv == vect_break_at:
-                    break
+
+
 
         # fetch  raster stream
         rast_csv_stream = c.download_blob(raster_layers_csv_blob)
@@ -238,10 +231,15 @@ def run(
 
             # instantitae  a reader
             rreader = csv.DictReader(rlines)
-            nr = 0
+
             for raster_csv_row in rreader:
 
                 rid = raster_csv_row['attribute_id']
+
+                if rids and rid not in rids:
+                    logger.debug(f'Skipping raster id {rid}')
+                    continue
+
                 band = int(raster_csv_row['band'])
                 if '\\' in raster_csv_row['file_name']:
                     rfile_name = raster_csv_row['file_name'].replace('\\', '/')
@@ -266,10 +264,7 @@ def run(
                     logger.info(f'{src_raster_blob_path} {e}')
                     missing_az_rasters.append(src_raster_blob_path)
                     continue
-                nr+=1
-                if rast_break_at is not None:
-                    if nr == rast_break_at:
-                        break
+
 
 
 
@@ -294,6 +289,8 @@ def run(
         except Exception as stdze:
             logger.error(f'Failed to standardize {vsiaz_rds_path}:{band}. \n {stdze}. Skipping')
             failed.append(vsiaz_rds_path)
+            #sum up to be able to to agg  export
+            no_proc_rast+=1
             continue
         for vds_id, vds_path in vsi_vect_paths.items():
             vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
@@ -317,15 +314,15 @@ def run(
             except Exception as zse:
                 logger.error(f'Failed to compute zonal stats for {vsiaz_rds_path}:{band} <> {vds_path}. \n {zse}. Skipping')
                 failed.append(vsiaz_rds_path)
-                raise
+                no_proc_rast +=1
                 continue
 
 
 
             #1 add new column to in mem shp
-
             add_field_to_vector(src_ds=vds, stats_dict=stat_result, field_name=rds_id)
-            #prepare out folders for json and mvt
+
+            #2 prepare out folders for json and mvt
             vector_json_dir = os.path.join(out_vector_path, root_geojson_folder_name)
             if not os.path.exists(vector_json_dir):
                 util.mkdir_recursive(vector_json_dir)
@@ -351,38 +348,43 @@ def run(
                     '-overwrite'
 
                 ]
-                logger.info(f'Exporting {vds_path} to {vector_geojson_path}')
-                geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
+
+                try:
+                    logger.info(f'Exporting {vds_path} to {vector_geojson_path}')
+                    geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
                                                    options=' '.join(geojson_opts)
-                                                   )
-                geojson_vds = None
-                #3 export geoJSON to MVT using tippecanoe
+                                               )
+                    geojson_vds = None
+                except Exception as geojerr:
+                    logger.error(f'Failed to convert {vds_path} to GeoJSON because "{geojerr}"')
+                    failed.append(vsiaz_rds_path)
+                    continue
+                #2 export geoJSON to MVT using tippecanoe
 
                 out_mvt_dir_path = os.path.join(out_vector_path, root_mvt_folder_name, rds_id)
                 if not os.path.exists(out_mvt_dir_path):
                     util.mkdir_recursive(out_mvt_dir_path)
-
-                res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
+                try:
+                    res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
                                                   minzoom=0, maxzoom=12,
                                                   output_mvt_dir_path=out_mvt_dir_path
                                                   )
+                except Exception as mvterr:
+                    logger.error(f'Failed to convert {vds_path} to MVT because "{mvterr}"')
+                    failed.append(vsiaz_rds_path)
+                    continue
 
-
-                #3 remove the new column from vds
+                #3 remove the new column from vds, no try except here because it would break the pipeline
                 remove_field_from_vector(src_ds=vds, field_name=rds_id)
 
                 # add to results for upload
-                if rds_id in mvt_folder_paths:
-                    mvt_folder_paths[rds_id].append(res)
-                else:
-                    mvt_folder_paths[rds_id] = [res]
+
             else:
 
                 if no_proc_rast == n_rast_to_process - 1:
 
                     logger.info(f'Exporting accumulated {vds_id} to MVT ')
                     #1 last raster, convert the vector to geojson
-
 
                     vector_geojson_path = os.path.join(vector_json_dir, f'{vds_id}.geojson')
 
@@ -400,32 +402,39 @@ def run(
                     ]
                     if os.path.exists(vector_geojson_path):
                         os.remove(vector_geojson_path)
-                    logger.info(f'Exporting {vds_path} to  {vector_geojson_path}')
-                    geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
-                                         options=' '.join(geojson_opts),
+                    try:
+                        logger.info(f'Exporting {vds_path} to  {vector_geojson_path}')
+                        geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
+                                             options=' '.join(geojson_opts),
 
-                                         )
-                    geojson_vds = None
-
+                                             )
+                        geojson_vds = None
+                    except Exception as agggeojerr:
+                        logger.error(f'Failed to convert {vds_path} to GeoJSON because "{agggeojerr}"')
+                        failed.append(vds_path)
+                        continue
 
                     #2 export to MVT
                     out_mvt_dir_path = os.path.join(out_vector_path, root_mvt_folder_name)
                     if not os.path.exists(out_mvt_dir_path):
                         util.mkdir_recursive(out_mvt_dir_path)
+                    try:
+                        res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
+                                                          minzoom=0, maxzoom=12,
+                                                          output_mvt_dir_path=out_mvt_dir_path
 
-                    res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
-                                                      minzoom=0, maxzoom=12,
-                                                      output_mvt_dir_path=out_mvt_dir_path
+                                                          )
+                    except Exception as aggmvterr:
+                        logger.error(f'Failed to convert {vds_path} to MVT because "{aggmvterr}"')
+                        failed.append(vds_path)
+                        continue
 
-                                                      )
 
-                    mvt_folder_paths[vds_id] = res
-                    #2 deallocate
-
+                    # deallocate vector dataset
                     vds = None
         no_proc_rast +=1
         #delete stdz raster
-        stdz_rds =None
+        stdz_rds = None
 
 
 
@@ -627,7 +636,7 @@ def main():
         upload_blob_path=upload_blob_path,
         remove_tiles_after_upload=remove_tiles_after_upload,
         alternative_path=alternative_path,
-        process_one=process_one
+        rids=process_one
 
 
        )
