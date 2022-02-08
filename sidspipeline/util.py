@@ -263,7 +263,8 @@ def export_with_tippecanoe(
                 if time.time() - start > timeout:
                     proc.terminate()
                     raise subprocess.TimeoutExpired(tippecanoe_cmd, timeout=timeout)
-        return os.path.join(output_mvt_dir_path, layer_name)
+
+    return out_dir
         # try:
         #     outs, errs = proc.communicate(timeout=timeout)
         #

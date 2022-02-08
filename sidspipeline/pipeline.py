@@ -156,9 +156,9 @@ def run(
     assert out_vector_path not in ('', None), f'Invalid out_vector_path={out_vector_path}'
 
 
-    per = 'vector' if aggregate_vect is True else 'raster'
 
-    logger.info(f'Going to compute and store vector tiles for every {per}')
+    if aggregate_vect:
+        logger.info(f'Running in aggregate mode')
 
     vsi_vect_paths = dict()
     vsiaz_rast_paths = dict()
@@ -370,15 +370,32 @@ def run(
                                                   minzoom=0, maxzoom=12,
                                                   output_mvt_dir_path=out_mvt_dir_path
                                                   )
+
+
                 except Exception as mvt_translate_error:
                     logger.error(
                         f'Failed to convert {vector_geojson_path} to MVT. {mvt_translate_error}. The layer will not be exported!')
                     continue
 
-                #3 remove the new column from vds
+                #4 upload
+                upload_folder = os.path.join(out_vector_path, root_mvt_folder_name)
+                logger.info(
+                    f'Going to upload vector tiles from {upload_folder} to container {cname}/{upload_blob_path}')
+                asyncio.run(
+                    upload_mvts(
+                        sas_url=sas_url,
+                        src_folder=upload_folder,
+                        dst_blob_name=f'{upload_blob_path}',
+                        timeout=3 * 60 * 60  # three hours
+                    )
+                )
+
+                #5 remove the new column from vds
                 remove_field_from_vector(src_ds=vds, field_name=rds_id)
-
-
+                #5 remove the tile layer and geojson
+                logger.info(f'Removing GeoJSON and MVT layers for {rds_id}/{vds_id}')
+                shutil.rmtree(upload_folder)
+                shutil.rmtree(vector_json_dir)
             else:
 
                 if no_proc_rast == n_rast_to_process - 1:
@@ -439,7 +456,7 @@ def run(
         #delete stdz raster
         stdz_rds =None
 
-
+    exit()
 
     #upload mvt to blob
     mvt_root_folder = os.path.join(out_vector_path, root_mvt_folder_name)
