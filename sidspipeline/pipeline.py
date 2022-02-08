@@ -162,7 +162,7 @@ def run(
 
     vsi_vect_paths = dict()
     vsiaz_rast_paths = dict()
-    mvt_folder_paths =dict()
+
 
 
 
@@ -282,7 +282,7 @@ def run(
         exit()
 
     logger.info(f'Going to process {n_rast_to_process} raster file/s and {len(vsi_vect_paths)} vector file/s')
-    exit()
+
     for rds_id, tp in vsiaz_rast_paths.items():
         vsiaz_rds_path, band = tp
         # 1 STANDARDIZE
@@ -315,14 +315,16 @@ def run(
             except Exception as zse:
                 logger.error(f'Failed to compute zonal stats for {vsiaz_rds_path}:{band} <> {vds_path}. \n {zse}. Skipping')
                 failed.append(vsiaz_rds_path)
-                raise
                 continue
 
 
 
             #1 add new column to in mem shp
-
-            add_field_to_vector(src_ds=vds, stats_dict=stat_result, field_name=rds_id)
+            try:
+                add_field_to_vector(src_ds=vds, stats_dict=stat_result, field_name=rds_id)
+            except Exception as afe:
+                logger.error(f'Failed to add filed {rds_id} to vector {vds_path}.Skipping!')
+                continue
             #prepare out folders for json and mvt
             vector_json_dir = os.path.join(out_vector_path, root_geojson_folder_name)
             if not os.path.exists(vector_json_dir):
@@ -350,30 +352,33 @@ def run(
 
                 ]
                 logger.info(f'Exporting {vds_path} to {vector_geojson_path}')
-                geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
+                try:
+                    geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
                                                    options=' '.join(geojson_opts)
                                                    )
-                geojson_vds = None
+                    geojson_vds = None
+                except Exception as geojson_translate_error:
+                    logger.error(f'Failed to convert {vds_path} to GeoJSON. {geojson_translate_error}. The layer will not be exported!')
+                    continue
                 #3 export geoJSON to MVT using tippecanoe
 
                 out_mvt_dir_path = os.path.join(out_vector_path, root_mvt_folder_name, rds_id)
                 if not os.path.exists(out_mvt_dir_path):
                     util.mkdir_recursive(out_mvt_dir_path)
-
-                res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
+                try:
+                    res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
                                                   minzoom=0, maxzoom=12,
                                                   output_mvt_dir_path=out_mvt_dir_path
                                                   )
-
+                except Exception as mvt_translate_error:
+                    logger.error(
+                        f'Failed to convert {vector_geojson_path} to MVT. {mvt_translate_error}. The layer will not be exported!')
+                    continue
 
                 #3 remove the new column from vds
                 remove_field_from_vector(src_ds=vds, field_name=rds_id)
 
-                # add to results for upload
-                if rds_id in mvt_folder_paths:
-                    mvt_folder_paths[rds_id].append(res)
-                else:
-                    mvt_folder_paths[rds_id] = [res]
+
             else:
 
                 if no_proc_rast == n_rast_to_process - 1:
@@ -398,28 +403,37 @@ def run(
                     ]
                     if os.path.exists(vector_geojson_path):
                         os.remove(vector_geojson_path)
-                    logger.info(f'Exporting {vds_path} to  {vector_geojson_path}')
-                    geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
-                                         options=' '.join(geojson_opts),
 
-                                         )
-                    geojson_vds = None
+                    try:
+                        logger.info(f'Exporting {vds_path} to  {vector_geojson_path}')
+                        geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
+                                             options=' '.join(geojson_opts),
+
+                                             )
+                        geojson_vds = None
+                    except Exception as agg_geojson_translate_error:
+                        logger.error(
+                            f'Failed to convert {vds_path} to GeoJSON. {agg_geojson_translate_error}. The layer will not be exported!')
+                        continue
 
 
                     #2 export to MVT
                     out_mvt_dir_path = os.path.join(out_vector_path, root_mvt_folder_name)
                     if not os.path.exists(out_mvt_dir_path):
                         util.mkdir_recursive(out_mvt_dir_path)
+                    try:
 
-                    res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
-                                                      minzoom=0, maxzoom=12,
-                                                      output_mvt_dir_path=out_mvt_dir_path
+                        res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
+                                                          minzoom=0, maxzoom=12,
+                                                          output_mvt_dir_path=out_mvt_dir_path
 
-                                                      )
+                                                          )
+                    except Exception as agg_mvt_translate_error:
+                        logger.error(
+                            f'Failed to convert {vector_geojson_path} to MVT. {agg_mvt_translate_error}. The layer will not be exported!')
+                        continue
 
-                    mvt_folder_paths[vds_id] = res
                     #2 deallocate
-
                     vds = None
         no_proc_rast +=1
         #delete stdz raster
