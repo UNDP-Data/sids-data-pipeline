@@ -121,7 +121,9 @@ def run(
             root_mvt_folder_name='tiles',
             root_geojson_folder_name = 'json',
             alternative_path=None,
-            process_one=True
+
+            filter_rid=None,
+            filter_vid=None
 
 
     ):
@@ -147,7 +149,7 @@ def run(
             inside the out_vector_path folder
     :param alternative_path: str, full path to a folder where the incoming thata that is downlaoded will be stored and
             cached. Used during developemnt
-    :param: process_one, default=True, if True the pipeline will stop after collecting one ratser and vector file
+
     :return:
     """
     assert raster_layers_csv_blob not in ('')
@@ -162,13 +164,8 @@ def run(
     vsiaz_rast_paths = dict()
     mvt_folder_paths =dict()
 
-    # used to stop parsing all data during devel
-    if process_one:
-        rast_break_at = 1
-        vect_break_at = 1
-    else:
-        rast_break_at = None
-        vect_break_at = None
+
+
 
     missing_az_vectors = list()
     missing_az_rasters = list()
@@ -185,10 +182,13 @@ def run(
             vstr.seek(0)
             vlines = (line.decode('utf-8') for line in vstr.readlines())
             vreader = csv.DictReader(vlines)
-            nv = 0
+
             for csv_vector_row in vreader:
 
                 vid = csv_vector_row['vector_id']
+                if filter_vid and vid not in filter_vid:
+                    logger.debug(f'Skipping {vid} (filter)')
+                    continue
                 if '\\' in csv_vector_row['file_name']:
                     vfile_name = csv_vector_row['file_name'].replace('\\', '/')
                 else:
@@ -219,9 +219,7 @@ def run(
                     continue
 
                 vsi_vect_paths[vid] = vsi_vect_path
-                nv+=1
-                if nv == vect_break_at:
-                    break
+
 
         # fetch  raster stream
         rast_csv_stream = c.download_blob(raster_layers_csv_blob)
@@ -238,10 +236,13 @@ def run(
 
             # instantitae  a reader
             rreader = csv.DictReader(rlines)
-            nr = 0
+
             for raster_csv_row in rreader:
 
                 rid = raster_csv_row['attribute_id']
+                if filter_rid and rid not in filter_rid:
+                    logger.debug(f'Skipping {rid} (filter)')
+                    continue
                 band = int(raster_csv_row['band'])
                 if '\\' in raster_csv_row['file_name']:
                     rfile_name = raster_csv_row['file_name'].replace('\\', '/')
@@ -266,10 +267,7 @@ def run(
                     logger.info(f'{src_raster_blob_path} {e}')
                     missing_az_rasters.append(src_raster_blob_path)
                     continue
-                nr+=1
-                if rast_break_at is not None:
-                    if nr == rast_break_at:
-                        break
+
 
 
 
@@ -284,7 +282,7 @@ def run(
         exit()
 
     logger.info(f'Going to process {n_rast_to_process} raster file/s and {len(vsi_vect_paths)} vector file/s')
-
+    exit()
     for rds_id, tp in vsiaz_rast_paths.items():
         vsiaz_rds_path, band = tp
         # 1 STANDARDIZE
@@ -569,9 +567,20 @@ def main():
                             help='Abs path to a folder where input data can be cached and reread an next launch', type=str
                             )
 
-    arg_parser.add_argument('-sm', '--sample_mode',
-                            help='if True the pipeline will stop after collecting one raster and vector file', type=boolean_string,
-                            default=False
+
+    arg_parser.add_argument('-rid', '--raster_id',
+                            help='the id/s (multiple) of the raster file as defined in raster blob spec csv.\n'
+                                 'If provided only the supplied rasters will be processed ',
+                            type=str,
+                            default=None,
+                            nargs='+'
+                            )
+    arg_parser.add_argument('-vid', '--vector_id',
+                            help='the id/s (multiple) of the vector file as defined in vector blob spec csv.\n'
+                                 'If provided only the supplied vectors will be processed ',
+                            type=str,
+                            default=None,
+                            nargs='+'
                             )
 
     arg_parser.add_argument('-d', '--debug',
@@ -592,7 +601,8 @@ def main():
     aggregate_vect = args.aggregate_vect
     debug = args.debug
     alternative_path=args.cache_folder
-    process_one = args.sample_mode
+    rid = args.raster_id
+    vid = args.vector_id
 
     rlogger = logging.getLogger()
     # remove the default stream handler and add the new on too it.
@@ -616,6 +626,19 @@ def main():
     os.environ['AZURE_STORAGE_ACCOUNT'] = azure_storage_account
     os.environ['AZURE_STORAGE_SAS_TOKEN'] = azure_sas_token
     os.environ['AZURE_SAS'] = azure_sas_token
+    #GDAL suff
+    os.environ['CPL_TMPDIR'] = '/tmp'
+    os.environ['GDAL_CACHEMAX'] = '1000'
+    os.environ['VSI_CACHE'] = 'TRUE'
+    os.environ['VSI_CACHE_SIZE'] = '5000000' # 5 MB (per file-handle)
+    os.environ['GDAL_DISABLE_READDIR_ON_OPEN'] = 'TRUE'
+    os.environ['GDAL_HTTP_MERGE_CONSECUTIVE_RANGES'] = 'YES'
+    os.environ['GDAL_HTTP_MULTIPLEX'] = 'YES'
+    os.environ['GDAL_HTTP_VERSION'] = '2'
+    os.environ['GDAL_HTTP_TIMEOUT'] = '3600' # secs
+
+
+
 
 
     run(
@@ -627,7 +650,9 @@ def main():
         upload_blob_path=upload_blob_path,
         remove_tiles_after_upload=remove_tiles_after_upload,
         alternative_path=alternative_path,
-        process_one=process_one
+
+        filter_rid=rid,
+        filter_vid=vid
 
 
        )
