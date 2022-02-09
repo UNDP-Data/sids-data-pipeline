@@ -127,6 +127,9 @@ def run(
 
 
     ):
+
+    print(filter_rid)
+
     """
 
     :param raster_layers_csv_blob: str, relative path(in respect to the container) of the CSV
@@ -275,10 +278,10 @@ def run(
     n_rast_to_process = len(vsiaz_rast_paths)
     n_vect_to_process = len(vsi_vect_paths)
     if n_rast_to_process == 0:
-        logger.warning(f'No raster file spec were fetched from {raster_layers_csv_blob}. Going to exit.')
+        logger.warning(f'No raster files are going to be processed. Going to exit.')
         exit()
     if n_vect_to_process == 0:
-        logger.warning(f'No vector file spec were fetched from {vector_layers_csv_blob}. Going to exit.')
+        logger.warning(f'No vector files are going to be processed. Going to exit.')
         exit()
 
     logger.info(f'Going to process {n_rast_to_process} raster file/s and {len(vsi_vect_paths)} vector file/s')
@@ -456,7 +459,7 @@ def run(
         #delete stdz raster
         stdz_rds =None
 
-    exit()
+
 
     #upload mvt to blob
     mvt_root_folder = os.path.join(out_vector_path, root_mvt_folder_name)
@@ -604,14 +607,20 @@ def main():
                                  'If provided only the supplied rasters will be processed ',
                             type=str,
                             default=None,
-                            nargs='+'
+                            action='store',
+                            dest='raster_id',
+                            nargs='*',
+
                             )
     arg_parser.add_argument('-vid', '--vector_id',
                             help='the id/s (multiple) of the vector file as defined in vector blob spec csv.\n'
                                  'If provided only the supplied vectors will be processed ',
                             type=str,
                             default=None,
-                            nargs='+'
+                            action='store',
+                            dest='vector_id',
+                            nargs='*',
+
                             )
 
     arg_parser.add_argument('-d', '--debug',
