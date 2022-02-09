@@ -116,7 +116,7 @@ def run(
             aggregate_vect=False,
             out_vector_path=None,
             upload_blob_path=None,
-            remove_tiles_after_upload=False,
+            remove_tiles_after_upload=True,
             # the args below should normally not be changed
             root_mvt_folder_name='tiles',
             root_geojson_folder_name = 'json',
@@ -128,7 +128,7 @@ def run(
 
     ):
 
-    print(filter_rid)
+
 
     """
 
@@ -150,8 +150,11 @@ def run(
             out_vector_path folder
     :param root_geojson_folder_name: str, the name of the folder where the GeoJSON datat will be written
             inside the out_vector_path folder
+    :param filter_rid: list of str, the id/s of the raster/s to be processed. Acts like a filter
+
+    :param filter_vid: list of str, the id/s of the vector/s to be processed. Acts like a filter
     :param alternative_path: str, full path to a folder where the incoming thata that is downlaoded will be stored and
-            cached. Used during developemnt
+            cached. Used during development
 
     :return:
     """
@@ -299,7 +302,7 @@ def run(
         for vds_id, vds_path in vsi_vect_paths.items():
             vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
 
-            logger.info(f'Processing zonal stats for raster {rds_id} and {vds_id} ')
+            logger.info(f'Processing zonal stats for raster {rds_id} and vector {vds_id} ')
             try:
                 if not alternative_path:
                     stat_result = zonal_stats(raster_path_or_ds=stdz_rds, vector_path_or_ds=vds, band=band)
@@ -396,86 +399,96 @@ def run(
                 #5 remove the new column from vds
                 remove_field_from_vector(src_ds=vds, field_name=rds_id)
                 #5 remove the tile layer and geojson
-                logger.info(f'Removing GeoJSON and MVT layers for {rds_id}/{vds_id}')
-                shutil.rmtree(upload_folder)
+                if remove_tiles_after_upload:
+                    logger.info(f'Removing GeoJSON and MVT layers for {rds_id}/{vds_id}')
+                    shutil.rmtree(upload_folder)
                 shutil.rmtree(vector_json_dir)
-            else:
 
-                if no_proc_rast == n_rast_to_process - 1:
-
-                    logger.info(f'Exporting accumulated {vds_id} to MVT ')
-                    #1 last raster, convert the vector to geojson
-
-
-                    vector_geojson_path = os.path.join(vector_json_dir, f'{vds_id}.geojson')
-
-                    geojson_opts = [
-                        '-f GeoJSON',
-                        '-addfields',
-                        '-overwrite',
-                        '-preserve_fid',
-                        '-nlt MULTIPOLYGON',
-                        f'-nln {vds_id}',
-                        '-skipfailures',
-                        '-overwrite'
-
-
-                    ]
-                    if os.path.exists(vector_geojson_path):
-                        os.remove(vector_geojson_path)
-
-                    try:
-                        logger.info(f'Exporting {vds_path} to  {vector_geojson_path}')
-                        geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
-                                             options=' '.join(geojson_opts),
-
-                                             )
-                        geojson_vds = None
-                    except Exception as agg_geojson_translate_error:
-                        logger.error(
-                            f'Failed to convert {vds_path} to GeoJSON. {agg_geojson_translate_error}. The layer will not be exported!')
-                        continue
-
-
-                    #2 export to MVT
-                    out_mvt_dir_path = os.path.join(out_vector_path, root_mvt_folder_name)
-                    if not os.path.exists(out_mvt_dir_path):
-                        util.mkdir_recursive(out_mvt_dir_path)
-                    try:
-
-                        res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
-                                                          minzoom=0, maxzoom=12,
-                                                          output_mvt_dir_path=out_mvt_dir_path
-
-                                                          )
-                    except Exception as agg_mvt_translate_error:
-                        logger.error(
-                            f'Failed to convert {vector_geojson_path} to MVT. {agg_mvt_translate_error}. The layer will not be exported!')
-                        continue
-
-                    #2 deallocate
-                    vds = None
-        no_proc_rast +=1
         #delete stdz raster
         stdz_rds =None
 
 
+    # handle aggregated
+    if aggregate_vect:
+        vector_json_dir = os.path.join(out_vector_path, root_geojson_folder_name)
+        if not os.path.exists(vector_json_dir):
+            util.mkdir_recursive(vector_json_dir)
+        out_mvt_dir_path = os.path.join(out_vector_path, root_mvt_folder_name)
+        if not os.path.exists(out_mvt_dir_path):
+            util.mkdir_recursive(out_mvt_dir_path)
 
-    #upload mvt to blob
-    mvt_root_folder = os.path.join(out_vector_path, root_mvt_folder_name)
-    geojson_root_folder = os.path.join(out_vector_path, root_geojson_folder_name)
-    if os.path.exists(geojson_root_folder):
-        shutil.rmtree(geojson_root_folder)
-    if os.path.exists(mvt_root_folder):
-        logger.info(f'Going to upload vector tiles from {mvt_root_folder} to container {cname}/{upload_blob_path}')
-        asyncio.run(
-            upload_mvts(
-                sas_url=sas_url,
-                src_folder=mvt_root_folder,
-                dst_blob_name=upload_blob_path,
-                timeout=3*60*60 #three hours
+        for vds_id, vds_path in vsi_vect_paths.items():
+            vds = gdal.OpenEx(vds_path, gdal.OF_UPDATE | gdal.OF_VECTOR)
+            logger.info(f'Exporting accumulated {vds_id} to MVT ')
+
+
+            vector_geojson_path = os.path.join(vector_json_dir, f'{vds_id}.geojson')
+
+            geojson_opts = [
+                '-f GeoJSON',
+                '-addfields',
+                '-overwrite',
+                '-preserve_fid',
+                '-nlt MULTIPOLYGON',
+                f'-nln {vds_id}',
+                '-skipfailures',
+                '-overwrite'
+
+
+            ]
+            if os.path.exists(vector_geojson_path):
+                os.remove(vector_geojson_path)
+
+            try:
+                logger.info(f'Exporting {vds_path} to  {vector_geojson_path}')
+                geojson_vds = gdal.VectorTranslate(destNameOrDestDS=vector_geojson_path, srcDS=vds,
+                                     options=' '.join(geojson_opts),
+
+                                     )
+                geojson_vds = None
+            except Exception as agg_geojson_translate_error:
+                logger.error(
+                    f'Failed to convert {vds_path} to GeoJSON. {agg_geojson_translate_error}. The layer {vds_id} will not be exported!')
+                continue
+
+
+            #2 export to MVT
+
+            try:
+
+                res = util.export_with_tippecanoe(src_geojson_file=vector_geojson_path, layer_name=vds_id,
+                                                  minzoom=0, maxzoom=12,
+                                                  output_mvt_dir_path=out_mvt_dir_path
+
+                                                  )
+            except Exception as agg_mvt_translate_error:
+                logger.error(
+                    f'Failed to convert {vector_geojson_path} to MVT. {agg_mvt_translate_error}. The layer {vds_id} will not be exported!')
+                continue
+
+
+            #upload mvt to blob
+
+
+            if os.path.exists(out_mvt_dir_path):
+                logger.info(f'Going to upload vector tiles from {res} to container {cname}/{upload_blob_path}')
+                asyncio.run(
+                    upload_mvts(
+                        sas_url=sas_url,
+                        src_folder=out_mvt_dir_path,
+                        dst_blob_name=upload_blob_path,
+                        timeout=3*60*60 #three hours
+                        )
                 )
-        )
+                if remove_tiles_after_upload:
+                    shutil.rmtree(os.path.join(out_mvt_dir_path, vds_id))
+
+            if os.path.exists(vector_json_dir):
+                shutil.rmtree(vector_json_dir)
+            vds = None
+
+    #report missing and failed
+
     missing_files = missing_az_vectors+missing_az_rasters
     for missing_file in missing_files:
         logger.error(f'{missing_file} could not be found on MS Azure and was not processed.')
@@ -483,8 +496,6 @@ def run(
     for fail in failed:
         logger.error(f'{fail} was not processed.')
 
-    if remove_tiles_after_upload:
-        shutil.rmtree(mvt_root_folder)
 
 
 
