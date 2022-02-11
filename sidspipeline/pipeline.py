@@ -205,7 +205,7 @@ def run(
                     vpath = csv_vector_row['path']
 
                 # src_vector_blob_path = os.path.join('/vsiaz/sids/rawdata', vpath, vfile_name)
-                src_vector_blob_path = os.path.join('rawdata', vpath.replace('Shapefile', 'Shapefiles'), vfile_name)
+                src_vector_blob_path = os.path.join('rawdata', vpath, vfile_name)
 
 
                 # check if it exists
@@ -261,7 +261,7 @@ def run(
                     rpath = raster_csv_row['path']
 
 
-                src_raster_blob_path = os.path.join('/vsiaz/sids/', rpath, rfile_name)
+                src_raster_blob_path = os.path.join(f'/vsiaz/{cname}/', rpath, rfile_name)
 
 
                 #TODO check if it exists

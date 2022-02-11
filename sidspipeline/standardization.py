@@ -22,6 +22,9 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
     logger.info(f'Standardizing {src_blob_path}')
 
 
+    clip_ymin = os.environ.get('CLIP_YMIN', clip_ymin)
+    clip_ymax = os.environ.get('CLIP_YMAX', clip_ymax)
+
     dst_blob_name = os.path.split(src_blob_path)[-1]
 
     if not 'tif' in dst_blob_name:
