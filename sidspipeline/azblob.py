@@ -259,7 +259,7 @@ async def folder2azureblob(container_client_instance=None, src_folder=None, dst_
                 for chunk in slicer(r,100):
                     ftrs = list()
                     #logger.info(f'Uploading file chunk no {n} from {nchunks} - {n / nchunks * 100:.2f}%')
-                    await asyncio.sleep(1)
+
                     for local_file in chunk:
 
                         if not local_file.is_file():continue
