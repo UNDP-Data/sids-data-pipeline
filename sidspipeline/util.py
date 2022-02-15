@@ -227,7 +227,7 @@ def export_with_tippecanoe(
         minzoom=None,
         maxzoom=None,
         output_mvt_dir_path=None,
-        timeout=600
+        timeout=3600*10
     ):
 
     """
