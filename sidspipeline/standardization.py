@@ -23,7 +23,9 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
 
 
     clip_ymin = os.environ.get('CLIP_YMIN', clip_ymin)
+    clip_xmin = os.environ.get('CLIP_XMIN', clip_xmin)
     clip_ymax = os.environ.get('CLIP_YMAX', clip_ymax)
+    clip_xmax = os.environ.get('CLIP_XMAX', clip_xmax)
 
     dst_blob_name = os.path.split(src_blob_path)[-1]
 
@@ -54,6 +56,11 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
 
 
     if src_srs is None:
+        # use the Dataset.GetProjection()
+        src_srs = osr.SpatialReference()
+        src_srs.ImportFromWkt(src_ds.GetProjection() or src_ds.GetProjectionRef())
+
+    if src_srs is None:
         logger.warning(f'Assuming {src_blob_path} features EPSG:{dst_prj} projection' )
         src_srs = osr.SpatialReference()
         src_srs.ImportFromEPSG(dst_prj)
@@ -67,7 +74,8 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
     dst_srs = osr.SpatialReference()
     dst_srs.ImportFromEPSG(dst_prj)
     #check if the input needs to be reprojected or clipped
-    proj_are_equal = bool(src_srs.IsSame(dst_srs))
+    #proj_are_equal = bool(src_srs.IsSame(dst_srs))
+    proj_are_equal = int(src_srs.GetAuthorityCode(None)) == int(dst_srs.GetAuthorityCode(None))
 
     should_reproject = not proj_are_equal
 
