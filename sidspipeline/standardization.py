@@ -74,8 +74,18 @@ def standardize(src_blob_path=None, dst_prj=4326, band=None,
     dst_srs = osr.SpatialReference()
     dst_srs.ImportFromEPSG(dst_prj)
     #check if the input needs to be reprojected or clipped
-    #proj_are_equal = bool(src_srs.IsSame(dst_srs))
-    proj_are_equal = int(src_srs.GetAuthorityCode(None)) == int(dst_srs.GetAuthorityCode(None))
+    try:
+
+        proj_are_equal = int(src_srs.GetAuthorityCode(None)) == int(dst_srs.GetAuthorityCode(None))
+    except Exception as evpe:
+        logger.info(f'Failed to compare src and dst projections using {osr.SpatialReference.GetAuthorityCode}. Trying using {osr.SpatialReference.IsSame} \n {evpe}')
+        try:
+            proj_are_equal = bool(src_srs.IsSame(dst_srs))
+        except Exception as evpe1:
+            logger.info(
+                f'Failed to compare src and dst projections using {osr.SpatialReference.IsSame}. Error is \n {evpe}')
+            raise  evpe1
+
 
     should_reproject = not proj_are_equal
 

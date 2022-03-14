@@ -21,6 +21,8 @@ def mode(a, axis=0):
     :return: number, the mode value
     """
     scores = np.unique(np.ravel(a))       # get ALL unique values
+    if not scores.size:
+        return 0
     testshape = list(a.shape)
     testshape[axis] = 1
     oldmostfreq = np.zeros(testshape)
@@ -130,6 +132,7 @@ def zonal_statistics(
 
     # clip base raster to aggregating vector intersection
     raster_info = gp.get_raster_info(base_raster_path_band[0])
+
     # -1 here because bands are 1 indexed
     raster_nodata = raster_info['nodata'][base_raster_path_band[1] - 1]
     temp_working_dir = tempfile.mkdtemp(dir=working_dir)
@@ -271,13 +274,13 @@ def zonal_statistics(
             valid_clipped = clipped_block[valid_mask]
             for agg_fid in np.unique(valid_agg_fids):
                 masked_clipped_block = valid_clipped[valid_agg_fids == agg_fid]
-                # if raster_nodata is not None:
-                #     clipped_nodata_mask = np.isclose(masked_clipped_block, raster_nodata)
-                # else:
-                #     clipped_nodata_mask = np.zeros(masked_clipped_block.shape, dtype=bool)
+                if raster_nodata is not None:
+                    clipped_nodata_mask = np.isclose(masked_clipped_block, raster_nodata)
+                else:
+                    clipped_nodata_mask = np.zeros(masked_clipped_block.shape, dtype=bool)
                 # aggregate_stats[agg_fid]['nodata_count'] += (np.count_nonzero(clipped_nodata_mask))
-                # if ignore_nodata:
-                #     masked_clipped_block = (masked_clipped_block[~clipped_nodata_mask])
+                if ignore_nodata:
+                    masked_clipped_block = (masked_clipped_block[~clipped_nodata_mask])
                 # if masked_clipped_block.size == 0:
                 #     continue
                 #
@@ -297,9 +300,9 @@ def zonal_statistics(
                 #     masked_clipped_block.size)
                 # aggregate_stats[agg_fid]['sum'] += np.sum(
                 #     masked_clipped_block)
-                aggregate_stats[agg_fid]['mean'] += np.mean(
+                aggregate_stats[agg_fid]['mean'] += np.nanmean(
                     (
-                        np.mean(masked_clipped_block),
+                        np.nanmean(masked_clipped_block),
                         aggregate_stats[agg_fid]['mean']
                      )
                 ).item()
@@ -392,7 +395,7 @@ def zonal_statistics(
             #     valid_unset_fid_block)
             # aggregate_stats[unset_fid]['sum'] = np.sum(
             #     valid_unset_fid_block)
-            aggregate_stats[unset_fid]['mean'] = np.mean(
+            aggregate_stats[unset_fid]['mean'] = np.nanmean(
                 valid_unset_fid_block).item()
             aggregate_stats[unset_fid]['mode'] = mode(
                 valid_unset_fid_block)
