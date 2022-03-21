@@ -188,10 +188,11 @@ def run(
             vstr.seek(0)
             vlines = (line.decode('utf-8') for line in vstr.readlines())
             vreader = csv.DictReader(vlines)
-            vids = [e['attribute_id'] for e in vreader]
+            csv_vector_rows = [e for e in vreader]
+            vids = [e['vector_id'] for e in csv_vector_rows]
             if not set(filter_vid).intersection(vids):
                 raise Exception(f'Invalid vector ids {filter_vid}. Valid values are {",".join(vids)}')
-            for csv_vector_row in vreader:
+            for csv_vector_row in csv_vector_rows:
 
                 vid = csv_vector_row['vector_id']
                 if filter_vid and vid not in filter_vid:
@@ -244,10 +245,12 @@ def run(
 
             # instantitae  a reader
             rreader = csv.DictReader(rlines)
-            rids = [e['attribute_id'] for e in rreader]
+            raster_csv_rows = [e for e in rreader]
+            rids = [e['attribute_id'] for e in raster_csv_rows]
             if not set(filter_rid).intersection(rids):
                 raise Exception(f'Invalid raster ids {filter_rid}. Valid values are {",".join(rids)}')
-            for raster_csv_row in rreader:
+
+            for raster_csv_row in raster_csv_rows:
 
                 rid = raster_csv_row['attribute_id']
                 if filter_rid and rid not in filter_rid:
@@ -543,7 +546,7 @@ def main():
     azlogger = logging.getLogger('azure.core.pipeline.policies.http_logging_policy')
     azlogger.setLevel(logging.WARNING)
 
-
+    logger.info('HELLO')
 
 
     ##### EXAMPLE ######################
@@ -575,10 +578,10 @@ def main():
         def error(self, message):
             #sys.stderr.write('error: %s\n' % message)
             logger.error(message)
-            self.print_help()
+            #self.print_help()
             exit(1)
 
-    arg_parser = ap.HelpParser(formatter_class=ap.ArgumentDefaultsHelpFormatter,
+    arg_parser = HelpParser(formatter_class=ap.ArgumentDefaultsHelpFormatter,
                                    description='Run the SIDS data pipeline. The pipeline computes zonal stats for a'
                                                ' number of vector layers from a number of raster layers.\nThe results'
                                                ' are converted into MapBox Vector Tile format and uploaded to an Azure Blob'
@@ -640,13 +643,14 @@ def main():
                             )
 
     arg_parser.add_argument('-d', '--debug',
-                            help='debug mode on/off', type=bool,
+                            type=boolean_string,
+                            help='debug mode on/off',
                             default=False
                             )
 
     # parse and collect args
     args = arg_parser.parse_args()
-    print(args)
+
 
     raster_layers_csv_blob = args.raster_layers_csv_blob
     vector_layers_csv_blob = args.vector_layers_csv_blob
@@ -692,6 +696,8 @@ def main():
     os.environ['GDAL_HTTP_MULTIPLEX'] = 'YES'
     os.environ['GDAL_HTTP_VERSION'] = '2'
     os.environ['GDAL_HTTP_TIMEOUT'] = '3600' # secs
+    #
+    os.environ['GDAL_HTTP_UNSAFESSL'] = 'YES'
 
 
 
