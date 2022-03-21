@@ -188,7 +188,9 @@ def run(
             vstr.seek(0)
             vlines = (line.decode('utf-8') for line in vstr.readlines())
             vreader = csv.DictReader(vlines)
-
+            vids = [e['attribute_id'] for e in vreader]
+            if not set(filter_vid).intersection(vids):
+                raise Exception(f'Invalid vector ids {filter_vid}. Valid values are {",".join(vids)}')
             for csv_vector_row in vreader:
 
                 vid = csv_vector_row['vector_id']
@@ -242,7 +244,9 @@ def run(
 
             # instantitae  a reader
             rreader = csv.DictReader(rlines)
-
+            rids = [e['attribute_id'] for e in rreader]
+            if not set(filter_rid).intersection(rids):
+                raise Exception(f'Invalid raster ids {filter_rid}. Valid values are {",".join(rids)}')
             for raster_csv_row in rreader:
 
                 rid = raster_csv_row['attribute_id']
@@ -570,10 +574,11 @@ def main():
     class HelpParser(ap.ArgumentParser):
         def error(self, message):
             #sys.stderr.write('error: %s\n' % message)
+            logger.error(message)
             self.print_help()
-            exit(0)
+            exit(1)
 
-    arg_parser = HelpParser(formatter_class=ap.ArgumentDefaultsHelpFormatter,
+    arg_parser = ap.HelpParser(formatter_class=ap.ArgumentDefaultsHelpFormatter,
                                    description='Run the SIDS data pipeline. The pipeline computes zonal stats for a'
                                                ' number of vector layers from a number of raster layers.\nThe results'
                                                ' are converted into MapBox Vector Tile format and uploaded to an Azure Blob'
@@ -641,7 +646,7 @@ def main():
 
     # parse and collect args
     args = arg_parser.parse_args()
-
+    print(args)
 
     raster_layers_csv_blob = args.raster_layers_csv_blob
     vector_layers_csv_blob = args.vector_layers_csv_blob
