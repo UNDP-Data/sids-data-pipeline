@@ -1,20 +1,28 @@
 import os
 import logging
 import time
-from osgeo import gdal, gdalconst
 import subprocess
 import itertools
 import shlex
+from configparser import ConfigParser
+from pathlib import Path
+from osgeo import gdal, gdalconst
 from urllib.parse import urlparse
 
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
 logger = logging.getLogger(__name__)
 
-
+cwd = Path(__file__).parent
+cfg = ConfigParser()
+cfg.read(cwd / '../config.ini')
+config = cfg['default']
 
 SUPPORTED_FORMATS = {
-        'ESRI Shapefile': 'shp',
-        'MVT':'pbf',
-        'GeoJSON':'geojson'
+    'ESRI Shapefile': 'shp',
+    'MVT': 'pbf',
+    'GeoJSON': 'geojson'
 }
 
 
@@ -25,56 +33,62 @@ def flush_cache(passwd):
     Needs sudo password
     :return: bool, True if success, False otherwise
     """
-    logger.debug('Clearing the OS cache using sudo -S sh -c "sync; echo 3 > /proc/sys/vm/drop_caches')
+    logger.debug(
+        'Clearing the OS cache using sudo -S sh -c "sync; echo 3 > /proc/sys/vm/drop_caches')
     #ret = os.system('echo %s | sudo -S sh -c "sync; echo 3 > /proc/sys/vm/drop_caches"' % passwd)
-    ret = os.popen('sudo -S sh -c "sync; echo 3 > /proc/sys/vm/drop_caches"', 'w').write(passwd)
+    ret = os.popen(
+        'sudo -S sh -c "sync; echo 3 > /proc/sys/vm/drop_caches"', 'w').write(passwd)
     return not bool(ret)
 
-def timeit(func=None,loops=1,verbose=False, clear_cache=False, sudo_passwd=None):
-    #print 0, func, loops, verbose, clear_cache, sudo_passwd
+
+def timeit(func=None, loops=1, verbose=False, clear_cache=False, sudo_passwd=None):
+    # print 0, func, loops, verbose, clear_cache, sudo_passwd
     if func != None:
         if clear_cache:
             assert sudo_passwd, 'sudo_password argument is needed to clear the kernel cache'
 
-        def inner(*args,**kwargs):
+        def inner(*args, **kwargs):
             sums = 0.0
             mins = 1.7976931348623157e+308
             maxs = 0.0
             logger.debug('====%s Timing====' % func.__name__)
-            for i in range(0,loops):
+            for i in range(0, loops):
                 if clear_cache:
                     flush_cache(sudo_passwd)
                 t0 = time.time()
-                result = func(*args,**kwargs)
+                result = func(*args, **kwargs)
                 dt = time.time() - t0
                 mins = dt if dt < mins else mins
                 maxs = dt if dt > maxs else maxs
                 sums += dt
                 if verbose == True:
-                    logger.debug('\t%r ran in %2.9f sec on run %s' %(func.__name__,dt,i))
-            logger.debug('%r min run time was %2.9f sec' % (func.__name__,mins))
-            logger.debug('%r max run time was %2.9f sec' % (func.__name__,maxs))
-            logger.info('%r avg run time was %2.9f sec in %s runs' % (func.__name__,sums/loops,loops))
+                    logger.debug('\t%r ran in %2.9f sec on run %s' %
+                                 (func.__name__, dt, i))
+            logger.debug('%r min run time was %2.9f sec' %
+                         (func.__name__, mins))
+            logger.debug('%r max run time was %2.9f sec' %
+                         (func.__name__, maxs))
+            logger.info('%r avg run time was %2.9f sec in %s runs' %
+                        (func.__name__, sums/loops, loops))
             logger.debug('==== end ====')
             return result
 
         return inner
     else:
         def partial_inner(func):
-            return timeit(func,loops,verbose, clear_cache, sudo_passwd)
+            return timeit(func, loops, verbose, clear_cache, sudo_passwd)
         return partial_inner
-
-
 
 
 def scantree(path):
     """Recursively yield sorted DirEntry objects for given directory."""
     for entry in sorted(os.scandir(path), key=lambda entry: entry.name):
         if entry.is_dir(follow_symlinks=False):
-            #yield entry
+            # yield entry
             yield from scantree(entry.path)
         else:
             yield entry
+
 
 def mkdir_recursive(path):
     """
@@ -88,6 +102,7 @@ def mkdir_recursive(path):
         mkdir_recursive(sub_path)
     if not os.path.exists(path):
         os.mkdir(path)
+
 
 def slicer(iterable=None, n=None):
     """
@@ -103,11 +118,13 @@ def slicer(iterable=None, n=None):
             return
         yield chunk
 
+
 def count(iter):
     try:
         return len(iter)
     except TypeError:
         return sum(1 for _ in iter)
+
 
 def fetch_vector_from_azure(rel_blob_path=None, client_container=None, alternative_path=None):
     """
@@ -118,24 +135,21 @@ def fetch_vector_from_azure(rel_blob_path=None, client_container=None, alternati
     :return:
     """
     parsed = urlparse(client_container.url)
-    blob_full_path = os.path.join(f'{parsed.scheme}://{parsed.netloc}{parsed.path}', rel_blob_path)
+    blob_full_path = os.path.join(
+        f'{parsed.scheme}://{parsed.netloc}{parsed.path}', rel_blob_path)
     name = os.path.split(rel_blob_path)[-1]
 
     if alternative_path is not None:
-        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
+        assert os.path.exists(
+            alternative_path), f'alternative_path={alternative_path} does not exist'
         dst_shp_path = os.path.join(alternative_path, name)
         if os.path.exists(dst_shp_path):
             logger.info(f'Reading {blob_full_path} from {dst_shp_path}')
             return dst_shp_path
 
-
-
-
     root = os.path.splitext(rel_blob_path)[0]
     rroot, ext = os.path.splitext(name)
     read_path = f'/vsimem/{rroot}{ext}'
-
-
 
     logger.info(f'Going to fetch {read_path} from  {blob_full_path}')
     for e in ('.shp', '.shx', '.dbf', '.prj'):
@@ -148,18 +162,15 @@ def fetch_vector_from_azure(rel_blob_path=None, client_container=None, alternati
     logger.debug(f'{blob_full_path} was downloaded and stored to {read_path}')
 
     if alternative_path is not None:
-        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
+        assert os.path.exists(
+            alternative_path), f'alternative_path={alternative_path} does not exist'
         dst_shp_path = os.path.join(alternative_path, name)
         logger.info(f'Creating {dst_shp_path}')
-        new_ds = gdal.VectorTranslate(destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=name)
+        new_ds = gdal.VectorTranslate(
+            destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=name)
         new_ds = None
 
     return read_path
-
-
-
-
-
 
 
 def fetch_az_shapefile(blob_path=None, client_container=None, alternative_path=None):
@@ -179,57 +190,60 @@ def fetch_az_shapefile(blob_path=None, client_container=None, alternative_path=N
     """
     blob_name = os.path.split(blob_path)[-1]
 
-    #gdal.SetConfigOption('SHAPE_RESTORE_SHX','YES')
+    # gdal.SetConfigOption('SHAPE_RESTORE_SHX','YES')
     if alternative_path is not None:
-        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
+        assert os.path.exists(
+            alternative_path), f'alternative_path={alternative_path} does not exist'
         dst_shp_path = os.path.join(alternative_path, blob_name)
         if os.path.exists(dst_shp_path):
             logger.info(f'Reading {blob_path} from {alternative_path}')
-            return gdal.OpenEx(dst_shp_path, gdalconst.OF_VECTOR|gdalconst.OF_UPDATE)
+            return gdal.OpenEx(dst_shp_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
         else:
             logger.info(f'{dst_shp_path} does not exist in {alternative_path}')
 
-    logger.info(f'Fetching {blob_path} from {client_container.container_name} container')
+    logger.info(
+        f'Fetching {blob_path} from {client_container.container_name} container')
     name = os.path.split(blob_path)[-1]
     root = os.path.splitext(blob_path)[0]
     rroot, ext = os.path.splitext(name)
     read_path = f'/vsimem/{rroot}{ext}'
 
-
     for e in ('.shp', '.shx', '.dbf', '.prj'):
         vsi_pth = f'/vsimem/{rroot}{e}'
-        remote_pth  = f'{root}{e}'
-        strm  = client_container.download_blob(remote_pth)
+        remote_pth = f'{root}{e}'
+        strm = client_container.download_blob(remote_pth)
         v = strm.readall()
         gdal.FileFromMemBuffer(vsi_pth, v)
     vds = gdal.OpenEx(read_path, gdalconst.OF_VECTOR | gdalconst.OF_UPDATE)
 
     if alternative_path is not None:
-        assert os.path.exists(alternative_path), f'alternative_path={alternative_path} does not exist'
+        assert os.path.exists(
+            alternative_path), f'alternative_path={alternative_path} does not exist'
         dst_shp_path = os.path.join(alternative_path, blob_name)
         logger.info(f'Creating {dst_shp_path}')
-        new_ds = gdal.VectorTranslate(destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=blob_name)
+        new_ds = gdal.VectorTranslate(
+            destNameOrDestDS=dst_shp_path, srcDS=vds, layerName=blob_name)
         new_ds = None
     return vds
 
+
 '''
 
-rm -rf out/mvt;docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm klokantech/tippecanoe tippecanoe /osm/out/admin0.geojson -l admin0 --output-to-directory=/osm/out/mvt 
-/usr/bin/docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm klokantech/tippecanoe tippecanoe /osm/out/admin0.geojson -l admin0 --output-to-directory=/osm/out/mvt 
+rm -rf out/mvt;docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm klokantech/tippecanoe tippecanoe /osm/out/admin0.geojson -l admin0 --output-to-directory=/osm/out/mvt
+/usr/bin/docker run --rm -it --name tipecanoe -v /data/sids/tmp/test/:/osm klokantech/tippecanoe tippecanoe /osm/out/admin0.geojson -l admin0 --output-to-directory=/osm/out/mvt
 
 '''
 
 
 def export_with_tippecanoe(
 
-        src_geojson_file=None,
-        layer_name=None,
-        minzoom=None,
-        maxzoom=None,
-        output_mvt_dir_path=None,
-        timeout=3600*10
-    ):
-
+    src_geojson_file=None,
+    layer_name=None,
+    minzoom=None,
+    maxzoom=None,
+    output_mvt_dir_path=None,
+    timeout=3600*10
+):
     """
     Export a GeoJSON into MVT using tippecanoe
 
@@ -242,9 +256,7 @@ def export_with_tippecanoe(
     :return:
     """
 
-
-
-    out_dir = os.path.join(output_mvt_dir_path,layer_name)
+    out_dir = os.path.join(output_mvt_dir_path, layer_name)
     logger.info(f'Exporting {src_geojson_file} to {out_dir}')
     # tippecanoe_cmd =    f'tippecanoe  -l {layer_name} -e {out_dir} ' \
     #                     f'-z {maxzoom} -Z {minzoom} --allow-existing --no-feature-limit --no-tile-size-limit ' \
@@ -252,7 +264,7 @@ def export_with_tippecanoe(
 
     tippecanoe_cmd = f'tippecanoe -z{maxzoom} --no-tile-compression --no-feature-limit --no-tile-size-limit --output-to-directory={out_dir} {src_geojson_file}'
 
-    #TODO ADD TIMER
+    # TODO ADD TIMER
     with subprocess.Popen(shlex.split(tippecanoe_cmd), stdout=subprocess.PIPE, start_new_session=True) as proc:
         start = time.time()
         while proc.poll() is None:
@@ -262,26 +274,19 @@ def export_with_tippecanoe(
             if timeout:
                 if time.time() - start > timeout:
                     proc.terminate()
-                    raise subprocess.TimeoutExpired(tippecanoe_cmd, timeout=timeout)
+                    raise subprocess.TimeoutExpired(
+                        tippecanoe_cmd, timeout=timeout)
 
     return out_dir
-        # try:
-        #     outs, errs = proc.communicate(timeout=timeout)
-        #
-        # except subprocess.TimeoutExpired:
-        #     logger.error(f'{tippecanoe_cmd} has timeout out after {timeout} seconds' )
-        #     proc.kill()
-        #     outs, errs = proc.communicate()
-        # except Exception as e:
-        #     logger.error(f'{e}')
-        #     raise
-        #
-        # return os.path.join(output_mvt_dir_path, layer_name)
-
-
-
-
-
-
-
-
+    # try:
+    #     outs, errs = proc.communicate(timeout=timeout)
+    #
+    # except subprocess.TimeoutExpired:
+    #     logger.error(f'{tippecanoe_cmd} has timeout out after {timeout} seconds' )
+    #     proc.kill()
+    #     outs, errs = proc.communicate()
+    # except Exception as e:
+    #     logger.error(f'{e}')
+    #     raise
+    #
+    # return os.path.join(output_mvt_dir_path, layer_name)

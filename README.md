@@ -1,8 +1,7 @@
 # SIDS data processing pipeline
 
-
-
 ## Intro
+
 **Small Islands Developing States (SIDS)** is a group of island states spatially disjoint located all over the world. This data pipeline can be used to pre-process and generate the bulk of spatial data for the SIDS platform [geospatial application](https://sids-dashboard.github.io/SIDSDataPlatform/main.html). The pipeline computes zonal stats for a number of vector layers from a number of raster layers and converts  the results into
 MapBox vector tiles (.pbf) and stores them in an Azure Blob storage container. The specs for the raster and vector files are
 fetched from CSV files stored in same Azure Blob storage. Both, the source and sink data is hosted inside and Azure Blob
@@ -24,25 +23,23 @@ url is required to access the CSV files. This can be provided either as a comman
 
 Ensures all data is brought to a common set of specs before it is processed:
 
- - ESPG:4326 projection
- - clipped to lonmin=-180, lonmax=180, latmin=-35, latmax=35
+- ESPG:4326 projection
+- clipped to lonmin=-180, lonmax=180, latmin=-35, latmax=35
 
-####        2. Zonal stats
+#### 2. Zonal stats
 
 Zonal statistics (mode and mean) are computed for each feature in a given vector from every available raster.
 
-####        3. Export to MVT using tippecanoe
+#### 3. Export to MVT using tippecanoe
 
 The results from zonal stats are added to the vector geometries in each  layer in attribute columns. Depending on the provided
 arguments the attributes are either added to the same vector layer or new layers are created for every raster layer.
 Next the MVT are exported using tippecanoe.
 
-
 ### 3. Upload to Azure blob
+
 In the last step the whole folder that contains the MVT files is uploded asynchronously to the Azure Blob container.
 Optionally the MVT folder can be also removed for the local file system.
-
-
 
 ## Notes
 
@@ -56,18 +53,14 @@ An alternative solution is to do some pre-processing on the original vector data
 As a result we resorted to using tippecanoe to export the data to MVT. For practical purposes, we used the dockerized version of tippecanoe because
 it is relatively straightforward to set up.
 
-
-
-
 ## Hands on
 
 The pipeline is deployed as a Docker image and this means [Docker](https://www.docker.com/) needs to be installed and available.
 
-
 ```bash
 #start by creating a folder
 mkdir sidspipeline
-cd sidspipeline       
+cd sidspipeline
 ```
 
 ### 1. Create an .env file holding the Azure credentials
@@ -75,21 +68,15 @@ cd sidspipeline
 The SIDS data is stored in an Azure blob container so a SAS  using your favourite editor create a .env text file and add
 `SAS_SIDS_CONTAINER=url` where url is a full Azure SAS URL.
 
-
-
 ### 2. Download the docker image
 
-
 ```bash
-docker pull ghcr.io/undp-data/sids-data-pipeline:latest     
+docker pull ghcr.io/undp-data/sids-data-pipeline:latest
 ```
 
 ### 3. run the pipeline
 
-
 The interaction with the pipeline is done via a python script deployed as **sidspipeline**  command inside the container:
-
-
 
 ```bash
 docker run  -ti --rm --name=sidsdatapipeline --env-file .env -v /data:/data ghcr.io/undp-data/sids-data-pipeline:latest sidspipeline
@@ -101,7 +88,6 @@ Here we are instructing docker to deploy a container using the previously pulled
 - is using/passed the env variables defined in the .env file through `--env-file` arg
 - is mounting local `/data` folder as `/data` inside the container
 - is immediately removed `--rm` after the  data pipeline script finishes
-
 
 The result of the above command is :
 
@@ -140,52 +126,48 @@ optional arguments:
 
 ```
 
-
 The arguments are more or less self explanatory and match  the structure of the pipeline as described in the [Structure](#Structure) section
 
-
-
 ```bash
-# run the script on 
-    
-   
+# run the script on
+
+
     docker run  -ti --rm \
     --name=sidsdatapipeline \
     --env-file .env \
     -v /data:/data \
     ghcr.io/undp-data/sids-data-pipeline:latest sidspipeline \
-  
-        -rb=config/attribute_list_updated.csv \  
+
+        -rb=config/attribute_list_updated.csv \
         -vb=config/vector_list.csv \
         -ov /data/sids/tmp/test1 \
         -ub=vtiles1 \
         -ag=True \
         -cf=/data/sids/tmp/test
-    
-    
+
+
     # or a one liner
     docker run  -ti --rm --name=sidsdatapipeline --env-file .env -v /data:/data ghcr.io/undp-data/sids-data-pipeline:latest sidspipeline -rb=config/attribute_list_updated.csv -vb=config/vector_list.csv -ov /data/sids/tmp/test1 -ub=vtiles1 -ag=True -ap=/data/sids/tmp/test
 
-    
+
     2022-01-22 16:18:18-pipeline.py:run:157:INFO:Going to compute and store vector tiles per vector
     2022-01-22 16:18:18-util.py:fetch_vector_from_azure:124:INFO:Reading rawdata/Shapefiles/admin/admin0-sids-4326.shp from /data/sids/tmp/test/admin0-sids-4326.shp
     2022-01-22 16:18:19-pipeline.py:run:258:INFO:/vsiaz/sids/rawdata/Raw GIS Data/Atlas/Data/Raster/1a1_band.tif is going to be aggregated for zonal stats
     2022-01-22 16:18:19-pipeline.py:run:280:INFO:Going to process 1 raster file/s and 1 vector file/s
     2022-01-22 16:18:19-standardization.py:standardize:22:INFO:Standardizing /vsiaz/sids/rawdata/Raw GIS Data/Atlas/Data/Raster/1a1_band.tif
     2022-01-22 16:18:19-standardization.py:standardize:37:INFO:Reusing /data/sids/tmp/test/1a1_band_stdz.tif instead of /vsiaz/sids/rawdata/Raw GIS Data/Atlas/Data/Raster/1a1_band.tif
-    2022-01-22 16:18:19-pipeline.py:run:293:INFO:Processing zonal stats for raster 1a1 and admin0 
+    2022-01-22 16:18:19-pipeline.py:run:293:INFO:Processing zonal stats for raster 1a1 and admin0
     2022-01-22 16:18:19-pipeline.py:run:306:INFO:Reusing zonal stats from /data/sids/tmp/test/admin0_1a1_stats.json
     2022-01-22 16:18:19-pipeline.py:add_field_to_vector:59:INFO:Adding field 1a1 to /data/sids/tmp/test/admin0-sids-4326.shp
-    2022-01-22 16:18:22-pipeline.py:run:373:INFO:Exporting accumulated admin0 to MVT 
+    2022-01-22 16:18:22-pipeline.py:run:373:INFO:Exporting accumulated admin0 to MVT
     2022-01-22 16:18:22-pipeline.py:run:393:INFO:Exporting /data/sids/tmp/test/admin0-sids-4326.shp to  /data/sids/tmp/test1/json/admin0.geojson
     2022-01-22 16:18:35-util.py:export_with_tippecanoe:248:INFO:Exporting /data/sids/tmp/test1/json/admin0.geojson to /data/sids/tmp/test1/tiles/admin0
     2022-01-22 16:18:47-pipeline.py:run:428:INFO:Going to upload vector tiles from /data/sids/tmp/test1/tiles to container sids/vtiles1
-    Uploading ... :  11% 
-    
+    Uploading ... :  11%
+
 ```
 
 The above command resulted in executing the SIDS data pipeline with following setup:
-
 
 - "-rb=config/attribute_list_updated.csv" - read the raster config specs from a CSV file located in the Azure blob path **config/attribute_list_updated.csv**
 - "-vb=config/vector_list.csv" - read the vector config specs from a CSV file located in the Azure blob path **config/vector_list.csv**
@@ -196,8 +178,9 @@ and the tiles will be stored there
 The result of this is that the number of generated vector tiles datasets is equal to the number of vector layers. In this arg is set to **False** then a vector tiles dataset
 would be generated for each input raster
   - Here is the output for agg=True value
+
   ```bash
-    janf@hyda:/work/py/depl$ tree -d -L 3 /data/sids/tmp/test1 
+    janf@hyda:/work/py/depl$ tree -d -L 3 /data/sids/tmp/test1
     /data/sids/tmp/test1
     └── tiles
         └── admin0
@@ -216,9 +199,11 @@ would be generated for each input raster
             └── 9
 
     ```
+
   - and here is  the output for the ag=False
+
   ```bash
-    janf@hyda:/work/py/depl$ tree -d -L 4 /data/sids/tmp/test1 
+    janf@hyda:/work/py/depl$ tree -d -L 4 /data/sids/tmp/test1
     /data/sids/tmp/test1
     └── tiles
         └── 1a1
@@ -238,11 +223,10 @@ would be generated for each input raster
                 └── 9
 
   ```
+
   - "-ap=/data/sids/tmp/test" - store the intermediary (downloaded from Azure) geo-spatial data in this folder and reuse it on next iterations. This should be used for
   testing and development only or is working with the pipeline on a machine with slow internet connection
-
 
 ## Development
 
 The pipeline can be modified by means of pull requests. Every tagged pull request will generate a new image.
-

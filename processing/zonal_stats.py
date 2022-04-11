@@ -12,6 +12,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+
 def mode(a, axis=0):
     """
     Compute mode in an array
@@ -31,7 +32,7 @@ def mode(a, axis=0):
 
     for score in scores:
         template = (a == score)
-        counts = np.expand_dims(np.sum(template, axis),axis)
+        counts = np.expand_dims(np.sum(template, axis), axis)
         mostfrequent = np.where(counts > oldcounts, score, oldmostfreq)
         oldcounts = np.maximum(counts, oldcounts)
         oldmostfreq = mostfrequent
@@ -156,7 +157,7 @@ def zonal_statistics(
                 lambda: {
                     # 'min': None, 'max': None, 'count': 0, 'nodata_count': 0,
                     # 'sum': 0.0,
-                    'mean': 0.0, 'mode': 0,}
+                    'mean': 0.0, 'mode': 0, }
             )
             for feature in aggregate_layer:
                 _ = aggregate_stats[feature.GetFID()]
@@ -198,9 +199,9 @@ def zonal_statistics(
         gp.iterblocks((agg_fid_raster_path, 1), offset_only=True))
     agg_fid_raster = gdal.OpenEx(
         agg_fid_raster_path, gdal.GA_Update | gdal.OF_RASTER)
-    aggregate_stats = collections.defaultdict(lambda: { 'mean': 0.0, 'mode': 0,
-        #'min': None, 'max': None, 'count': 0, 'nodata_count': 0, 'sum': 0.0
-    })
+    aggregate_stats = collections.defaultdict(lambda: {'mean': 0.0, 'mode': 0,
+                                                       # 'min': None, 'max': None, 'count': 0, 'nodata_count': 0, 'sum': 0.0
+                                                       })
     last_time = time.time()
     logger.info("processing %d disjoint polygon sets", len(disjoint_fid_sets))
     for set_index, disjoint_fid_set in enumerate(disjoint_fid_sets):
@@ -275,12 +276,15 @@ def zonal_statistics(
             for agg_fid in np.unique(valid_agg_fids):
                 masked_clipped_block = valid_clipped[valid_agg_fids == agg_fid]
                 if raster_nodata is not None:
-                    clipped_nodata_mask = np.isclose(masked_clipped_block, raster_nodata)
+                    clipped_nodata_mask = np.isclose(
+                        masked_clipped_block, raster_nodata)
                 else:
-                    clipped_nodata_mask = np.zeros(masked_clipped_block.shape, dtype=bool)
+                    clipped_nodata_mask = np.zeros(
+                        masked_clipped_block.shape, dtype=bool)
                 # aggregate_stats[agg_fid]['nodata_count'] += (np.count_nonzero(clipped_nodata_mask))
                 if ignore_nodata:
-                    masked_clipped_block = (masked_clipped_block[~clipped_nodata_mask])
+                    masked_clipped_block = (
+                        masked_clipped_block[~clipped_nodata_mask])
                 # if masked_clipped_block.size == 0:
                 #     continue
                 #
@@ -304,14 +308,14 @@ def zonal_statistics(
                     (
                         np.nanmean(masked_clipped_block),
                         aggregate_stats[agg_fid]['mean']
-                     )
+                    )
                 ).item()
                 aggregate_stats[agg_fid]['mode'] += mode(
                     (
                         np.asarray((mode(masked_clipped_block), aggregate_stats[agg_fid]['mode']),
                                    dtype=masked_clipped_block.dtype
                                    )
-                     )
+                    )
                 )
     unset_fids = aggregate_layer_fid_set.difference(aggregate_stats)
     logger.debug(
@@ -432,10 +436,8 @@ def zonal_statistics(
     return {int(k): v for (k, v) in v.items()}
 
 
-
-
 def zonal_stats(raster_path_or_ds=None, vector_path_or_ds=None, band=None,
-                ignore_nodata=True, polygons_might_overlap=True ):
+                ignore_nodata=True, polygons_might_overlap=True):
     """
     This functions wraps the adapted zonal_statistics function from
     pygeoprocessing package so it can be used with vsimem datasets.
@@ -455,15 +457,14 @@ def zonal_stats(raster_path_or_ds=None, vector_path_or_ds=None, band=None,
 
     """
 
-    #TODO find a more elegant solution
-
+    # TODO find a more elegant solution
 
     if hasattr(raster_path_or_ds, 'GetFileList'):
         files = raster_path_or_ds.GetFileList()
         if not files:
             raster_file_name = uuid.uuid1()
             raster_path = f'/vsimem/{raster_file_name}.vrt'
-            gdal.Translate(raster_path,raster_path_or_ds, format='VRT')
+            gdal.Translate(raster_path, raster_path_or_ds, format='VRT')
         else:
             raster_path = files[0]
     else:
@@ -474,10 +475,10 @@ def zonal_stats(raster_path_or_ds=None, vector_path_or_ds=None, band=None,
         if not files:
             vector_file_name = uuid.uuid1()
             vector_path = f'/vsimem/{vector_file_name}.vrt'
-            gdal.VectorTranslate(destNameOrDestDS=vector_path,srcDS=vector_path_or_ds, format='VRT')
+            gdal.VectorTranslate(destNameOrDestDS=vector_path,
+                                 srcDS=vector_path_or_ds, format='VRT')
         else:
             vector_path = files[0]
-
 
     else:
         vector_path = vector_path_or_ds
