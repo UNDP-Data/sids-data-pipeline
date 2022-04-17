@@ -33,7 +33,7 @@ def get_rows(data_type, filter_id, input_ext, tmp_ext):
 
 
 def download_if_missing(data_type):
-    blob_path = download_path / f'{data_type}.csv',
+    blob_path = download_path / f'{data_type}.csv'
     input_path = cwd / f'../inputs/{data_type}.csv'
     if input_path.is_file() and input_path.stat().st_size > 0:
         pass
