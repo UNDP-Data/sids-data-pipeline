@@ -28,10 +28,9 @@ def stats_to_vector(row, _):
         view_out=Identifier(f'{v_id}_view'),
     ))
     row['tmp_path'].parent.mkdir(parents=True, exist_ok=True)
+    row['tmp_path'].unlink(missing_ok=True)
     subprocess.run([
         'ogr2ogr',
-        '-makevalid',
-        '-overwrite',
         row['tmp_path'],
         f'PG:dbname={DATABASE}', f'{v_id}_view',
     ])
