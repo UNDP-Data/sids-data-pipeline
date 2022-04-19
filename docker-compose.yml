@@ -1,7 +1,10 @@
 services:
   sids-data-pipeline:
+    platform: linux/amd64
     build: .
     volumes:
+      - ./.env:/usr/src/app/.env
       - ./config.ini:/usr/src/app/config.ini
       - ./inputs:/usr/src/app/inputs
       - ./outputs:/usr/src/app/outputs
+      - ./tmp:/usr/src/app/tmp
