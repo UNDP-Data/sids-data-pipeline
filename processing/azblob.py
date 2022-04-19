@@ -1,11 +1,10 @@
-from sidspipeline.util import scantree, mkdir_recursive
+from .utils import scantree, mkdir_recursive, slicer, count
 from azure.storage.blob.aio import ContainerClient
 from urllib.parse import urlparse
 import logging
 import os
 import time
 import asyncio
-from sidspipeline.util import slicer, count
 from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,6 @@ def atimeit(func):
     async def process(func, *args, **params):
         return await func(*args, **params)
 
-
     async def helper(*args, **params):
         start = time.time()
         result = await process(func, *args, **params)
@@ -31,15 +29,15 @@ def atimeit(func):
     return helper
 
 
-
-
 def get_container_client(sas_url=None):
     assert sas_url is not None, f'sas_url is required to upload/download data from AZ blob container'
     try:
         return ContainerClient.from_container_url(sas_url)
     except Exception as e:
-        logger.error(f'failed to create an azure.storage.blob.ContainerClient object from {sas_url}')
+        logger.error(
+            f'failed to create an azure.storage.blob.ContainerClient object from {sas_url}')
         raise
+
 
 class HandyContainerClient():
 
@@ -53,8 +51,6 @@ class HandyContainerClient():
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.cclient.close()
-
-
 
 
 class FancyContainerClient():
@@ -76,8 +72,6 @@ class FancyContainerClient():
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.cclient.close()
 
-
-
     async def list_blobs_async(self, name=None):
         """
         Lists blobs whose name start with name
@@ -88,10 +82,8 @@ class FancyContainerClient():
         async for blob in self.cclient.list_blobs(name_starts_with=name):
             yield blob
 
-
     async def async2sync(self, name=None):
         return [item async for item in self.list_blobs_async(name=name)]
-
 
     def listblobs(self, name=None):
         """
@@ -101,7 +93,6 @@ class FancyContainerClient():
         """
 
         yield from asyncio.run(self.async2sync(name=name))
-
 
 
 async def localfile2azureblob(container_client_instance=None, src=None, dst_blob_name=None,  overwrite=False, max_concurrency=8):
@@ -122,19 +113,22 @@ async def localfile2azureblob(container_client_instance=None, src=None, dst_blob
     if not dst_blob_name:
         _, dst_blob_name = os.path.split(parsed_src_url.path)
 
-    assert dst_blob_name not in [None, '', ' '], f'Invalid destination blob name {dst_blob_name}'
+    assert dst_blob_name not in [
+        None, '', ' '], f'Invalid destination blob name {dst_blob_name}'
     try:
 
         async with container_client_instance:
             with open(src, 'rb') as data:
                 await container_client_instance.upload_blob(name=dst_blob_name, data=data,
-                                                                blob_type='BlockBlob', overwrite=overwrite,
-                                                                max_concurrency=max_concurrency)
+                                                            blob_type='BlockBlob', overwrite=overwrite,
+                                                            max_concurrency=max_concurrency)
 
         logger.info(f'{src} was uploaded as {dst_blob_name}')
     except Exception as e:
-        logger.error(f'Failed to upload {src} to {container_client_instance.url}')
+        logger.error(
+            f'Failed to upload {src} to {container_client_instance.url}')
         raise
+
 
 async def upload_file(container_client_instance=None, src=None, dst_blob_name=None,  overwrite=False, max_concurrency=8):
 
@@ -156,18 +150,15 @@ async def upload_file(container_client_instance=None, src=None, dst_blob_name=No
     if not dst_blob_name:
         _, dst_blob_name = os.path.split(parsed_src_url.path)
 
-    assert dst_blob_name not in [None, '', ' '], f'Invalid destination blob name {dst_blob_name}'
-
+    assert dst_blob_name not in [
+        None, '', ' '], f'Invalid destination blob name {dst_blob_name}'
 
     with open(src, 'rb') as data:
         blob_client = await container_client_instance.upload_blob(name=dst_blob_name, data=data,
-                                                        blob_type='BlockBlob', overwrite=overwrite,
-                                                        max_concurrency=max_concurrency)
+                                                                  blob_type='BlockBlob', overwrite=overwrite,
+                                                                  max_concurrency=max_concurrency)
         logger.debug(f'{src} was uploaded as {dst_blob_name}')
         return blob_client, src
-
-
-
 
 
 async def azureblob2localfile(container_client_instance=None, blob_name=None, dst_file=None):
@@ -184,7 +175,7 @@ async def azureblob2localfile(container_client_instance=None, blob_name=None, ds
     :return: None
     """
     assert dst_file not in [None, ''], f'invalid destination file {dst_file}'
-    assert  os.path.isabs(dst_file), 'dst_file must be an absolute path'
+    assert os.path.isabs(dst_file), 'dst_file must be an absolute path'
 
     try:
 
@@ -200,7 +191,6 @@ async def azureblob2localfile(container_client_instance=None, blob_name=None, ds
         raise Exception(err_msg)
 
 
-
 async def download_file(container_client_instance=None, blob_name=None, dst_file=None):
 
     """
@@ -211,7 +201,7 @@ async def download_file(container_client_instance=None, blob_name=None, dst_file
     :return: True, dst_file in case no exception is encountered
     """
     assert dst_file not in [None, ''], f'invalid destination file {dst_file}'
-    assert  os.path.isabs(dst_file), 'dst_file must be an absolute path'
+    assert os.path.isabs(dst_file), 'dst_file must be an absolute path'
     logger.info(f'Going to download {dst_file} from {blob_name}')
     with open(dst_file, 'wb') as dstf:
         stream = await container_client_instance.download_blob(blob_name)
@@ -221,11 +211,8 @@ async def download_file(container_client_instance=None, blob_name=None, dst_file
     return True, dst_file
 
 
-
-
-
 async def folder2azureblob(container_client_instance=None, src_folder=None, dst_blob_name=None,
-                            overwrite=False, max_concurrency=8, timeout=None
+                           overwrite=False, max_concurrency=8, timeout=None
                            ):
     """
     Asynchronously upload a local folder (including its content) to Azure blob container
@@ -238,17 +225,20 @@ async def folder2azureblob(container_client_instance=None, src_folder=None, dst_
     :param timeout, timeout in seconds to be applied to uploading all files in the folder.
     :return:
     """
-    assert src_folder not in [None, '', '/' ], f'src_folder={src_folder} is invalid'
-    assert os.path.exists(src_folder), f'src_folder={src_folder} does not exist'
-    assert os.path.isabs(src_folder), f'src_folder={src_folder} is not a an absolute path'
-    assert os.path.isdir(src_folder), f'src_folder={src_folder} is not a directory'
-    assert len(src_folder)>1, f'src_folder={src_folder} is invalid'
-
-
+    assert src_folder not in [
+        None, '', '/'], f'src_folder={src_folder} is invalid'
+    assert os.path.exists(
+        src_folder), f'src_folder={src_folder} does not exist'
+    assert os.path.isabs(
+        src_folder), f'src_folder={src_folder} is not a an absolute path'
+    assert os.path.isdir(
+        src_folder), f'src_folder={src_folder} is not a directory'
+    assert len(src_folder) > 1, f'src_folder={src_folder} is invalid'
 
     try:
         async with container_client_instance:
-            prefix = os.path.split(src_folder)[-1] if dst_blob_name is None else dst_blob_name
+            prefix = os.path.split(
+                src_folder)[-1] if dst_blob_name is None else dst_blob_name
             r = scantree(src_folder)
             nfiles = count(r)
             nchunks = nfiles//100 + 1
@@ -256,42 +246,44 @@ async def folder2azureblob(container_client_instance=None, src_folder=None, dst_
             r = scantree(src_folder)
             with tqdm(total=nchunks, desc="Uploading ... ", initial=0, unit_scale=True,
                       colour='green') as pbar:
-                for chunk in slicer(r,100):
+                for chunk in slicer(r, 100):
                     ftrs = list()
                     #logger.info(f'Uploading file chunk no {n} from {nchunks} - {n / nchunks * 100:.2f}%')
 
                     for local_file in chunk:
 
-                        if not local_file.is_file():continue
-                        blob_path = os.path.join(prefix, os.path.relpath(local_file.path, src_folder))
+                        if not local_file.is_file():
+                            continue
+                        blob_path = os.path.join(
+                            prefix, os.path.relpath(local_file.path, src_folder))
                         #print(e.path, blob_path)
                         fut = asyncio.ensure_future(
                             upload_file(container_client_instance=container_client_instance,
-                                                src=local_file.path, dst_blob_name=blob_path, overwrite=overwrite,
-                                                max_concurrency=max_concurrency)
+                                        src=local_file.path, dst_blob_name=blob_path, overwrite=overwrite,
+                                        max_concurrency=max_concurrency)
                         )
                         ftrs.append(fut)
-
-
 
                     done, pending = await asyncio.wait(ftrs, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
                     results = await asyncio.gather(*done, return_exceptions=True)
                     for res in results:
                         if type(res) == tuple:
                             blob_client, file_path_to_upload = res
-                        else: #error
-                            logger.error(f'{file_path_to_upload} was not uploaded successfully to {blob_client.blob_name}')
+                        else:  # error
+                            logger.error(
+                                f'{file_path_to_upload} was not uploaded successfully to {blob_client.blob_name}')
                             logger.error(res)
 
                     for failed in pending:
-                        blob_client, file_path_to_upload =  await failed
-                        logger.debug(f'Uploading {file_path_to_upload} to {container_client_instance.url} has timed out.')
+                        blob_client, file_path_to_upload = await failed
+                        logger.debug(
+                            f'Uploading {file_path_to_upload} to {container_client_instance.url} has timed out.')
                     pbar.update(1)
-                    n+=1
+                    n += 1
     except Exception as err:
-        logger.error(f'Failed to upload {src_folder} to {container_client_instance.url}')
+        logger.error(
+            f'Failed to upload {src_folder} to {container_client_instance.url}')
         raise
-
 
 
 async def download_folder_from_azure(container_client_instance=None, src_blob_name=None, dst_folder=None, timeout=None,
@@ -307,27 +299,33 @@ async def download_folder_from_azure(container_client_instance=None, src_blob_na
     :return:
     """
 
-    assert dst_folder not in [None, '', '/'], f'dst_folder={dst_folder} is invalid'
-    assert os.path.exists(dst_folder), f'dst_folder={dst_folder} does not exist'
-    assert os.path.isabs(dst_folder), f'dst_folder={dst_folder} is not a an absolute path'
-    assert os.path.isdir(dst_folder), f'dst_folder={dst_folder} is not a directory'
+    assert dst_folder not in [
+        None, '', '/'], f'dst_folder={dst_folder} is invalid'
+    assert os.path.exists(
+        dst_folder), f'dst_folder={dst_folder} does not exist'
+    assert os.path.isabs(
+        dst_folder), f'dst_folder={dst_folder} is not a an absolute path'
+    assert os.path.isdir(
+        dst_folder), f'dst_folder={dst_folder} is not a directory'
     assert len(dst_folder) > 1, f'dst_folder={dst_folder} is invalid'
-
 
     ftrs = list()
 
     try:
         async with container_client_instance:
 
-            blob_iter =  container_client_instance.list_blobs(name_starts_with=src_blob_name)
+            blob_iter = container_client_instance.list_blobs(
+                name_starts_with=src_blob_name)
             async for blob in blob_iter:
                 if not strip_path:
                     dst_file = os.path.join(dst_folder, blob.name)
                 else:
-                    dst_file = os.path.join(dst_folder, os.path.split(blob.name)[-1])
+                    dst_file = os.path.join(
+                        dst_folder, os.path.split(blob.name)[-1])
                 mkdir_recursive(os.path.dirname(dst_file))
                 if os.path.exists(dst_file) and blob.size == os.path.getsize(dst_file):
-                    logger.info(f'Skipping {blob.name} because it already exists as {dst_file}')
+                    logger.info(
+                        f'Skipping {blob.name} because it already exists as {dst_file}')
                     continue
                 fut = asyncio.ensure_future(
                     download_file(container_client_instance=container_client_instance,
@@ -343,14 +341,17 @@ async def download_folder_from_azure(container_client_instance=None, src_blob_na
 
                 if type(res) == tuple:
                     success, downloaded_file_path = res
-                    logger.debug(f'{downloaded_file_path} was successfully downloaded from {container_client_instance.url}')
-                else: #error
-                    logger.error(f'{downloaded_file_path} was not downloaded successfully from {container_client_instance.url}')
+                    logger.debug(
+                        f'{downloaded_file_path} was successfully downloaded from {container_client_instance.url}')
+                else:  # error
+                    logger.error(
+                        f'{downloaded_file_path} was not downloaded successfully from {container_client_instance.url}')
                     logger.error(res)
 
             for failed in pending:
-                success, downloaded_file_path =  await failed
-                logger.info(f'Downloading {downloaded_file_path} from {container_client_instance.url} has timed out.')
+                success, downloaded_file_path = await failed
+                logger.info(
+                    f'Downloading {downloaded_file_path} from {container_client_instance.url} has timed out.')
 
     except Exception as err:
         logger.error(err)
@@ -377,9 +378,7 @@ async def upload_mvts(sas_url=None, src_folder=None, dst_blob_name=None, timeout
         )
 
 
-
 if __name__ == '__main__':
-
 
     logging.basicConfig()
     logger.setLevel('INFO')
@@ -393,8 +392,7 @@ if __name__ == '__main__':
     local_folder = '/data/undp/enmap/hrea/zarr/a/2'
     local_folder_cp = '/data/sids/'
 
-
-    #example how to run using the class context wrapper
+    # example how to run using the class context wrapper
 
     async def example_run(sas_url=None):
         async with HandyContainerClient(sas_url=sas_url) as cc:
@@ -402,16 +400,13 @@ if __name__ == '__main__':
                                              src_blob_name='rawdata/Raw GIS Data/Atlas/Data/ocean/gebco_2020_geotiff',
                                              strip_path=True)
 
-
     asyncio.run(example_run(sas_url=sas_url))
 
-
-    #examples hot to run using a functional interface
+    # examples hot to run using a functional interface
 
     #cc = get_container_client(sas_url=write_sas_url)
     #asyncio.run(localfile2azureblob(container_client_instance=cc, src=local_file, overwrite=True))
-    #asyncio.run(azureblob2localfile(container_client_instance=cc,blob_name='zambia_energyaccess_poverty.csv',dst_file='a'))
+    # asyncio.run(azureblob2localfile(container_client_instance=cc,blob_name='zambia_energyaccess_poverty.csv',dst_file='a'))
 
     #asyncio.run(folder2azureblob(container_client_instance=cc,src_folder=local_folder, dst_blob_name='ttt', overwrite=True, timeout=5))
     #asyncio.run(download_folder_from_azure(container_client_instance=cc, dst_folder=local_folder_cp, src_blob_name='ttt'))
-
