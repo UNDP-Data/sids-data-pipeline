@@ -1,6 +1,5 @@
-from psycopg2 import connect
 from psycopg2.sql import SQL, Identifier
-from .utils import DATABASE, logging
+from .utils import logging
 
 logger = logging.getLogger(__name__)
 query_1 = """
@@ -16,24 +15,20 @@ query_1 = """
     )
     SELECT
         fid,
-        (ST_SummaryStatsAgg(rast, 1, true)).mean AS mean,
+        (ST_SummaryStatsAgg(rast, 1, true)).mean AS mean
     FROM x
     GROUP BY fid
     ORDER BY fid;
 """
 
 
-def data_stats(v_row, r_row):
-    v_id = v_row['id'].replace('-', '_')
-    r_id = r_row['id'].replace('-', '_')
-    con = connect(database=DATABASE)
-    con.set_session(autocommit=True)
-    cur = con.cursor()
-    cur.execute(SQL(query_1).format(
-        table_in_v=Identifier(v_id),
-        table_in_r=Identifier(r_id),
-        table_out=Identifier(f'{v_id}_{r_id}'),
-    ))
-    cur.close()
-    con.close()
-    logger.info(f'calculated {v_id} vector stats for {r_id} raster')
+def generate_stats(r_row, vector_data, cur):
+    for v_row in vector_data:
+        v_id = v_row['id'].replace('-', '_')
+        r_id = r_row['id'].replace('-', '_')
+        cur.execute(SQL(query_1).format(
+            table_in_v=Identifier(v_id),
+            table_in_r=Identifier(r_id),
+            table_out=Identifier(f'{v_id}_{r_id}'),
+        ))
+    logger.info(f'calculated {r_id} stats')

@@ -1,4 +1,4 @@
-from .utils import logging, download_file, multiprocess_single
+from .utils import logging, download_file
 
 logger = logging.getLogger(__name__)
 

@@ -27,7 +27,6 @@ def standardize_raster(row, *_):
             '-te', xmin, ymax, xmax, ymin,
             input_path, tmp_path,
         ])
-        logger.info(f"projected {row['id']} raster to EPSG:{epsg}")
     else:
         subprocess.run([
             'gdal_translate',
@@ -36,5 +35,4 @@ def standardize_raster(row, *_):
             '-projwin', xmin, ymax, xmax, ymin,
             input_path, tmp_path,
         ])
-        bbox = f'[{xmin}, {ymax}, {xmax}, {ymin}]'
-        logger.info(f"clipped {row['id']} raster to {bbox}")
+    logger.info(f"standardized {row['id']} raster")

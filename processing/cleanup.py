@@ -30,7 +30,7 @@ def clean_tmp_vector(r_row, vector_data, _):
             (cwd / f'../tmp/vectors/{tmp_file}').unlink(missing_ok=True)
 
 
-def clean_outputs(r_row, vector_data, _):
+def clean_output(r_row, vector_data, _):
     if not keep_files:
         for v_row in vector_data:
             tmp_file = f"{v_row['id']}_{r_row['id']}.mbtiles"

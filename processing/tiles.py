@@ -35,5 +35,5 @@ def upload_tiles(row, *_):
         subprocess.run([
             'azcopy', 'copy', '--recursive',
             input_path, upload_url,
-        ])
+        ], stdout=subprocess.DEVNULL)
         logger.info(f"uploaded {row['id']} vector tiles")
