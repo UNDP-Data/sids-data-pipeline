@@ -4,12 +4,11 @@ from .utils import logging
 
 logger = logging.getLogger(__name__)
 common_options = ['-q', '--config', 'GDAL_NUM_THREADS', 'ALL_CPUS',
-                  '-co', 'TILED=YES',
-                  '-co', 'BLOCKXSIZE=128', '-co', 'BLOCKYSIZE=128',
-                  '-co', 'COMPRESS=DEFLATE', '-co', 'ZLEVEL=9']
+                  '-co', 'COMPRESS=DEFLATE', '-co', 'TILED=YES',
+                  '-co', 'BLOCKXSIZE=128', '-co', 'BLOCKYSIZE=128']
 
 
-def standardize_raster(row, _):
+def standardize_raster(row, *_):
     tmp_path = row['tmp_path']
     input_path = row['input_path']
     gdalsrsinfo = ['gdalsrsinfo', '-e', input_path]
@@ -39,8 +38,3 @@ def standardize_raster(row, _):
         ])
         bbox = f'[{xmin}, {ymax}, {xmax}, {ymin}]'
         logger.info(f"clipped {row['id']} raster to {bbox}")
-
-
-def standardize_rasters(raster_data):
-    for row in raster_data:
-        standardize_raster(row, None)

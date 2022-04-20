@@ -2,10 +2,7 @@
 
 ## Intro
 
-**Small Islands Developing States (SIDS)** is a group of island states spatially disjoint located all over the world. This data pipeline can be used to pre-process and generate the bulk of spatial data for the SIDS platform [geospatial application](https://sids-dashboard.github.io/SIDSDataPlatform/main.html). The pipeline computes zonal stats for a number of vector layers from a number of raster layers and converts  the results into
-MapBox vector tiles (.pbf) and stores them in an Azure Blob storage container. The specs for the raster and vector files are
-fetched from CSV files stored in same Azure Blob storage. Both, the source and sink data is hosted inside and Azure Blob
-storage container managed by UNDP GeoAnalytics.
+**Small Islands Developing States (SIDS)** is a group of island states spatially disjoint located all over the world. This data pipeline can be used to pre-process and generate the bulk of spatial data for the SIDS platform [geospatial application](https://data.undp.org/sids/geospatial-data). The pipeline computes zonal stats for a number of vector layers from a number of raster layers and converts the results into MapBox vector tiles (.pbf) and stores them in an Azure Blob storage container. The specs for the raster and vector files are fetched from CSV files stored in same Azure Blob storage. Both, the source and sink data is hosted inside and Azure Blob storage container managed by UNDP GeoAnalytics.
 
 ## Structure
 
@@ -13,9 +10,21 @@ The data pipeline consists of three fucntional blocks
 
 #### 1. Sources
 
-The input consists of paths from where the raster and vector CSV spec files are downloaded. Obviously an Azure container SAS
-url is required to access the CSV files. This can be provided either as a command line argument or an env. variable called
- `SAS_SIDS_CONTAINER` can be created for the same purpose.
+Inputs are defined through two metadata CSV files hosted on an Azure Container Blob, describing all the vector and raster data resources used in the pipeline. An Azure shared access signature (SAS) url is required to access all resources. This can be provided either as a config argument or an env variable called `SAS_SIDS_CONTAINER` can be created for the same purpose. Organization follows the following directory structure.
+
+```shell
+inputs
+├── rasters.csv
+├── vectors.csv
+├── rasters
+│   ├── data1.tif
+│   ├── data2.tif
+│   └── data3.tif
+└── vectors
+    ├── zone1.gpkg
+    ├── zone2.gpkg
+    └── zone3.gpkg
+```
 
 ### 2. Processing
 
@@ -28,7 +37,7 @@ Ensures all data is brought to a common set of specs before it is processed:
 
 #### 2. Zonal stats
 
-Zonal statistics (mode and mean) are computed for each feature in a given vector from every available raster.
+Zonal statistics (mean and count) are computed for each feature in a given vector from every available raster.
 
 #### 3. Export to MVT using tippecanoe
 
@@ -175,8 +184,8 @@ The above command resulted in executing the SIDS data pipeline with following se
 and the tiles will be stored there
 - "-ub=vtiles1" uplod the output tiles into the **vtiles** fodler on the remote Azure storage specified by `SAS_SIDS_CONTAINER` env var
 - "-ag=True" - aggregate the vector tiles per vector, that ie, the zontal stats for all raster files will be stored as attributes in each  input vector dataset
-The result of this is that the number of generated vector tiles datasets is equal to the number of vector layers. In this arg is set to **False** then a vector tiles dataset
-would be generated for each input raster
+  The result of this is that the number of generated vector tiles datasets is equal to the number of vector layers. In this arg is set to **False** then a vector tiles dataset
+  would be generated for each input raster
   - Here is the output for agg=True value
 
   ```bash
@@ -198,7 +207,7 @@ would be generated for each input raster
             ├── 8
             └── 9
 
-    ```
+  ```
 
   - and here is  the output for the ag=False
 

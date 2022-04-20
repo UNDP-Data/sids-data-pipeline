@@ -1,6 +1,5 @@
-import pandas as pd
 from .config import download_path, raster_ids, vector_ids
-from .utils import cwd, logging, download_file
+from .utils import cwd, logging, read_csv, download_file
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,7 @@ def format_rows(rows, data_type, input_ext, tmp_ext):
 
 
 def get_rows(data_type, filter_id, input_ext, tmp_ext):
-    rows = pd.read_csv(cwd / f'../inputs/{data_type}.csv').to_dict('records')
+    rows = read_csv(cwd / f'../inputs/{data_type}.csv')
     all_ids = sorted(set([e['id'] for e in rows]))
     if ''.join(filter_id) != '':
         if not set(filter_id).issubset(all_ids):

@@ -1,10 +1,10 @@
 import subprocess
-from .utils import DATABASE, logging, multiprocess_single
+from .utils import DATABASE, logging
 
 logger = logging.getLogger(__name__)
 
 
-def import_raster(row, _):
+def import_raster(row, *_):
     subprocess.run(' '.join([
         'raster2pgsql',
         '-d', '-r', '-C', '-I', '-Y',
@@ -19,7 +19,7 @@ def import_raster(row, _):
     logger.info(f"imported {row['id']} raster to database")
 
 
-def import_vector(row, _):
+def import_vector(row, *_):
     subprocess.run([
         'ogr2ogr',
         '-makevalid',
@@ -35,8 +35,3 @@ def import_vector(row, _):
         row['input_path'],
     ])
     logger.info(f"imported {row['id']} vector to database")
-
-
-def import_data(vector_data, raster_data):
-    multiprocess_single(import_vector, vector_data)
-    multiprocess_single(import_raster, raster_data)

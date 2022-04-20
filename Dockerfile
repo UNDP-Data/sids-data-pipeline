@@ -33,9 +33,7 @@ RUN wget https://aka.ms/downloadazcopy-v10-linux \
 RUN /etc/init.d/postgresql start \
   && su postgres -c 'createdb sids_data_pipeline' \
   && su postgres -c 'psql -d sids_data_pipeline -c "CREATE EXTENSION postgis;"' \
-  && su postgres -c 'psql -d sids_data_pipeline -c "CREATE EXTENSION postgis_raster;"' \
-  && su postgres -c 'psql -d sids_data_pipeline -c "ALTER DATABASE sids_data_pipeline SET postgis.enable_outdb_rasters = true;"' \
-  && su postgres -c 'psql -d sids_data_pipeline -c "ALTER DATABASE sids_data_pipeline SET postgis.gdal_enabled_drivers TO \'ENABLE_ALL\';"'
+  && su postgres -c 'psql -d sids_data_pipeline -c "CREATE EXTENSION postgis_raster;"'
 
 WORKDIR /usr/src/app
 
