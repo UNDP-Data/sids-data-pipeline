@@ -17,7 +17,7 @@ raster_funcs = [download_data, standardize_raster, clean_input, import_raster,
                 clean_tmp_raster, generate_stats, stats_to_vector,
                 clean_db_raster, export_tiles, clean_tmp_vector, upload_tiles,
                 clean_output]
-vector_cleanup = [clean_db_vector, clean_all]
+vector_cleanup = [clean_db_vector]
 
 if __name__ == '__main__':
     logger.info('starting')
@@ -25,4 +25,5 @@ if __name__ == '__main__':
     multiprocess(vector_funcs, vector_data)
     multiprocess(raster_funcs, raster_data, vector_data)
     multiprocess(vector_cleanup, vector_data)
+    clean_all()
     logger.info('finished')
