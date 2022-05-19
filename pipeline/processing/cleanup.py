@@ -41,3 +41,8 @@ def clean_db_vector(row, _, cur):
     cur.execute(SQL(query_2).format(
         table_in1=Identifier(v_id),
     ))
+
+
+def clean_all(*_):
+    shutil.rmtree(cwd / '../inputs', ignore_errors=True)
+    shutil.rmtree(cwd / '../tmp', ignore_errors=True)
