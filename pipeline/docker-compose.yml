@@ -1,0 +1,11 @@
+services:
+  sids-data-pipeline:
+    platform: linux/amd64
+    image: undpgeohub.azurecr.io/sids-data-pipeline
+    build: .
+    environment:
+      - SAS_SIDS_CONTAINER=${SAS_SIDS_CONTAINER}
+    volumes:
+      - ./inputs:/usr/src/app/inputs
+      - ./tmp:/usr/src/app/tmp
+      - ./outputs:/usr/src/app/outputs

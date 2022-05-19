@@ -1,0 +1,32 @@
+apiVersion: "2021-07-01"
+name: sids-data-pipeline
+location: westeurope
+properties:
+  osType: Linux
+  restartPolicy: OnFailure
+  containers:
+    - name: sids-data-pipeline
+      properties:
+        environmentVariables:
+          - name: SAS_SIDS_CONTAINER
+            value: $MY_SAS_SIDS_CONTAINER
+        image: undpgeohub.azurecr.io/sids-data-pipeline
+        resources:
+          requests:
+            cpu: 4
+            memoryInGB: 16
+        volumeMounts:
+          - mountPath: /usr/src/app/outputs
+            name: sids-data
+  volumes:
+    - name: sids-data
+      azureFile:
+        sharename: sids-data
+        storageAccountName: $MY_ACCOUNT_NAME
+        storageAccountKey: $MY_ACCOUNT_KEY
+  imageRegistryCredentials:
+    - server: undpgeohub.azurecr.io
+      username: $MY_USERNAME
+      password: $MY_PASSWORD
+tags: {}
+type: Microsoft.ContainerInstance/containerGroups
