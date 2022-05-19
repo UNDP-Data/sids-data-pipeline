@@ -40,6 +40,6 @@ COPY requirements.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY processing ./processing
-RUN mkdir inputs && mkdir tmp && mkdir outputs
 
+RUN chown -R postgres:postgres /usr/src/app
 CMD /etc/init.d/postgresql start && su postgres -c 'python3 -m processing'
