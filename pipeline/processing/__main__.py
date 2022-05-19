@@ -1,5 +1,5 @@
 from .cleanup import (clean_input, clean_tmp_raster, clean_tmp_vector,
-                      clean_db_vector, clean_db_raster)
+                      clean_db_vector, clean_db_raster, clean_all)
 from .data import get_data
 from .download import download_data
 from .inputs import import_raster, import_vector
@@ -25,4 +25,5 @@ if __name__ == '__main__':
     multiprocess(raster_funcs, raster_data, vector_data)
     multiprocess(vector_cleanup, vector_data)
     generate_config(vector_data, raster_data)
+    clean_all()
     logger.info('finished')

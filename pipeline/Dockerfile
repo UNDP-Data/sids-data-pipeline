@@ -1,19 +1,13 @@
 FROM ubuntu:22.04
-ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Install build tools
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
   build-essential ca-certificates git libsqlite3-dev wget zlib1g-dev \
+  gdal-bin postgis postgresql-14-postgis-3 python3-pip \
   && rm -rf /var/lib/apt/lists/*
 
-# Install geospatial packages
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-  gdal-bin postgresql-14-postgis-3 python3-pip \
-  && rm -rf /var/lib/apt/lists/*
-
-# Install tippecanoe
 RUN git clone https://github.com/mapbox/tippecanoe.git \
   && cd tippecanoe \
   && make -j \
@@ -21,7 +15,6 @@ RUN git clone https://github.com/mapbox/tippecanoe.git \
   && cd ../ \
   && rm -rf tippecanoe
 
-#  Install AzCopy
 RUN wget https://aka.ms/downloadazcopy-v10-linux \
   && tar -xvf downloadazcopy-v10-linux \
   && cp azcopy_linux_amd64_*/azcopy /usr/bin/ \

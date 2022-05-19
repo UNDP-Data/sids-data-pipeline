@@ -17,7 +17,7 @@ def export_tiles(r_row, vector_data, _):
             '--drop-densest-as-needed',
             '--force',
             f'--layer={v_id}_{r_id}',
-            '--maximum-zoom=12',
+            '--maximum-zoom=10',
             '--no-tile-size-limit',
             '--read-parallel',
             '--simplify-only-low-zooms',
