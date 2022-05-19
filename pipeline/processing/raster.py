@@ -4,8 +4,7 @@ from .utils import logging
 
 logger = logging.getLogger(__name__)
 common_options = ['-q', '--config', 'GDAL_NUM_THREADS', 'ALL_CPUS',
-                  '-co', 'COMPRESS=ZSTD', '-co', 'PREDICTOR=2',
-                  '-co', 'TILED=YES',
+                  '-co', 'COMPRESS=DEFLATE', '-co', 'TILED=YES',
                   '-co', 'BLOCKXSIZE=128', '-co', 'BLOCKYSIZE=128']
 
 
