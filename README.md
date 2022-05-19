@@ -2,6 +2,14 @@
 
 ## Intro
 
+```shell
+docker container prune -f && docker image prune -af && docker compose build
+docker push undpgeohub.azurecr.io/sids-data-server
+az container create --resource-group undpdpbppssdganalyticsgeo --file deploy.yml
+
+az container logs --resource-group undpdpbppssdganalyticsgeo --name sids-data-server
+```
+
 **Small Islands Developing States (SIDS)** is a group of island states spatially disjoint located all over the world. This data pipeline can be used to pre-process and generate the bulk of spatial data for the SIDS platform [geospatial application](https://data.undp.org/sids/geospatial-data). The pipeline computes zonal stats for a number of vector layers from a number of raster layers and converts the results into MapBox vector tiles (.pbf) and stores them in an Azure Blob storage container. The specs for the raster and vector files are fetched from CSV files stored in same Azure Blob storage. Both, the source and sink data is hosted inside and Azure Blob storage container managed by UNDP GeoAnalytics.
 
 ## Structure

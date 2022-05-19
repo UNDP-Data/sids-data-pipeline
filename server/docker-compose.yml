@@ -1,0 +1,9 @@
+services:
+  sids-data-server:
+    platform: linux/amd64
+    image: undpgeohub.azurecr.io/sids-data-server
+    build: .
+    ports:
+      - 8080:80
+    volumes:
+      - ./data:/usr/src/app/data

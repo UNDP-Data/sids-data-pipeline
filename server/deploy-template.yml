@@ -1,0 +1,37 @@
+apiVersion: "2021-07-01"
+name: sids-data-server
+location: westeurope
+properties:
+  osType: Linux
+  restartPolicy: OnFailure
+  containers:
+    - name: sids-data-server
+      properties:
+        environmentVariables: []
+        image: undpgeohub.azurecr.io/sids-data-server
+        ports:
+          - port: 80
+        resources:
+          requests:
+            cpu: 1
+            memoryInGB: 1
+        volumeMounts:
+          - mountPath: /usr/src/app
+            name: sids-data
+  volumes:
+    - name: sids-data
+      azureFile:
+        sharename: sids-data
+        storageAccountName: $MY_ACCOUNT_NAME
+        storageAccountKey: $MY_ACCOUNT_KEY
+  ipAddress:
+    dnsNameLabel: sidsdata
+    type: Public
+    ports:
+      - port: 80
+  imageRegistryCredentials:
+    - server: undpgeohub.azurecr.io
+      username: $MY_USERNAME
+      password: $MY_PASSWORD
+tags: {}
+type: Microsoft.ContainerInstance/containerGroups
