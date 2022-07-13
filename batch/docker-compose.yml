@@ -1,0 +1,10 @@
+services:
+  sids-data-batch:
+    platform: linux/amd64
+    image: undpgeohub.azurecr.io/sids-data-batch
+    build: .
+    environment:
+      - SAS_SIDS_CONTAINER=${SAS_SIDS_CONTAINER}
+    volumes:
+      - ./inputs:/usr/src/app/inputs
+      - ./outputs:/usr/src/app/outputs

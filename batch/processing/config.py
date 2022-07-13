@@ -1,13 +1,8 @@
 import os
-import logging
 from pathlib import Path
 
-logger = logging.getLogger('azure')
-logger.setLevel(logging.ERROR)
-
-cwd = Path(__file__).parent
-
 download_path = Path('inputs')
+upload_path = Path('inputs/rasters')
 
 sas_url = os.environ.get('SAS_SIDS_CONTAINER')
 azure_container = sas_url.split('?')[0]

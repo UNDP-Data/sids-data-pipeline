@@ -3,4 +3,4 @@ inputs/
 outputs/
 tmp/
 .env
-deploy.yml
+manifest.yml

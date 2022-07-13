@@ -16,24 +16,26 @@ query_2 = """
 """
 
 
-def stats_to_vector(r_row, vector_data, cur):
-    r_id = r_row['id'].replace('-', '_')
+def stats_to_vector(r_row, vector_data, r_v_data, cur):
+    r_id = r_row['id'].lower()
     for v_row in vector_data:
-        v_id = v_row['id'].replace('-', '_')
-        cur.execute(SQL(query_1).format(
-            table_in1=Identifier(v_id),
-            table_in2=Identifier(f'{v_id}_{r_id}'),
-            view_out=Identifier(f'{v_id}_{r_id}_view'),
-        ))
-        tmp_path = cwd / f"../tmp/vectors/{v_id}_{r_id}.geojsonl"
-        tmp_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path.unlink(missing_ok=True)
-        subprocess.run([
-            'ogr2ogr',
-            tmp_path,
-            f'PG:dbname={DATABASE}', f'{v_id}_{r_id}_view',
-        ])
-        cur.execute(SQL(query_2).format(
-            view_out=Identifier(f'{v_id}_{r_id}_view'),
-        ))
+        if f"{v_row['id']}_{r_row['id']}" in r_v_data:
+            v_id = v_row['id']
+            cur.execute(SQL(query_1).format(
+                table_in1=Identifier(v_id),
+                table_in2=Identifier(f'{v_id}_{r_id}'),
+                view_out=Identifier(f'{v_id}_{r_id}_view'),
+            ))
+            tmp_path = (cwd /
+                        f"../tmp/vectors/{v_row['id']}_{r_row['id']}.geojsonl")
+            tmp_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path.unlink(missing_ok=True)
+            subprocess.run([
+                'ogr2ogr',
+                tmp_path,
+                f'PG:dbname={DATABASE}', f'{v_id}_{r_id}_view',
+            ])
+            cur.execute(SQL(query_2).format(
+                view_out=Identifier(f'{v_id}_{r_id}_view'),
+            ))
     logger.info(f'merged {r_id} raster stats with vector geometry')
