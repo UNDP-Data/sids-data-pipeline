@@ -22,8 +22,8 @@ properties:
     - name: sids-data
       azureFile:
         sharename: sids-data
-        storageAccountName: $MY_ACCOUNT_NAME
-        storageAccountKey: $MY_ACCOUNT_KEY
+        storageAccountName: $AZURE_STORAGE_NAME
+        storageAccountKey: $AZURE_STORAGE_KEY
   ipAddress:
     dnsNameLabel: sidsdata
     type: Public
@@ -31,7 +31,7 @@ properties:
       - port: 80
   imageRegistryCredentials:
     - server: undpgeohub.azurecr.io
-      username: $MY_USERNAME
-      password: $MY_PASSWORD
+      username: $AZURE_REGISTRY_USERNAME
+      password: $AZURE_REGISTRY_PASSWORD
 tags: {}
 type: Microsoft.ContainerInstance/containerGroups
