@@ -10,6 +10,7 @@ cwd = Path(__file__).parent
 download_path = Path('inputs')
 
 sas_url = os.environ.get('SAS_SIDS_CONTAINER')
+sas_data_url = os.environ.get('SAS_SIDS_DATA_CONTAINER')
 azure_container = sas_url.split('?')[0]
 azure_sas = sas_url.split('?')[1]
 

@@ -10,20 +10,13 @@ properties:
         environmentVariables:
           - name: SAS_SIDS_CONTAINER
             value: $SAS_SIDS_CONTAINER
+          - name: SAS_SIDS_DATA_CONTAINER
+            value: $SAS_SIDS_DATA_CONTAINER
         image: undpgeohub.azurecr.io/sids-data-pipeline
         resources:
           requests:
             cpu: 4
             memoryInGB: 8
-        volumeMounts:
-          - mountPath: /usr/src/app/outputs
-            name: sids-data
-  volumes:
-    - name: sids-data
-      azureFile:
-        sharename: sids-data
-        storageAccountName: $AZURE_STORAGE_NAME
-        storageAccountKey: $AZURE_STORAGE_KEY
   imageRegistryCredentials:
     - server: undpgeohub.azurecr.io
       username: $AZURE_REGISTRY_USERNAME

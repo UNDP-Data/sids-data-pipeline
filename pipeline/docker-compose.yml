@@ -5,6 +5,7 @@ services:
     build: .
     environment:
       - SAS_SIDS_CONTAINER=${SAS_SIDS_CONTAINER}
+      - SAS_SIDS_DATA_CONTAINER=${SAS_SIDS_DATA_CONTAINER}
     volumes:
       - ./inputs:/usr/src/app/inputs
       - ./tmp:/usr/src/app/tmp

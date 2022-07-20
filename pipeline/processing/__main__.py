@@ -7,7 +7,6 @@ from .stats import generate_stats
 from .tiles import export_tiles
 from .utils import logging, multiprocess
 from .vector import stats_to_vector
-from .tileserver import generate_config
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +22,5 @@ if __name__ == '__main__':
     multiprocess(vector_funcs, vector_data)
     multiprocess(raster_funcs, raster_data, vector_data, raster_vector_data)
     multiprocess(vector_cleanup, vector_data)
-    generate_config()
     clean_all()
     logger.info('finished')

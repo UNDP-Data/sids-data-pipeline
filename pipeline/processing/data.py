@@ -1,6 +1,6 @@
 from pathlib import Path
 from azure.storage.blob import ContainerClient
-from .config import download_path, sas_url
+from .config import download_path, sas_url, sas_data_url
 from .utils import cwd, logging
 
 logger = logging.getLogger(__name__)
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def list_blobs(data_type):
     container = ContainerClient.from_container_url(sas_url)
-    blob_list = container.list_blobs(name_starts_with=f'inputs/{data_type}')
+    blob_list = container.list_blobs(name_starts_with=f'inputs/{data_type}/')
     return list(map(lambda x: {'id': Path(x.name).stem}, blob_list))
 
 
@@ -24,14 +24,15 @@ def get_rows(rows, data_type, input_ext, tmp_ext):
 
 
 def filter_rasters(raster_data, vector_data):
+    container = ContainerClient.from_container_url(sas_data_url)
     r_data = []
     v_r_data = []
     for r_row in raster_data:
         append = False
         for v_row in vector_data:
-            tiles = (cwd /
-                     f"../outputs/data/{v_row['id']}_{r_row['id']}.mbtiles")
-            if not tiles.is_file() or tiles.stat().st_size == 0:
+            blob_path = f"{v_row['id']}_{r_row['id']}/metadata.json"
+            blob = container.get_blob_client(blob_path)
+            if not blob.exists():
                 v_r_data.append(f"{v_row['id']}_{r_row['id']}")
                 append = True
         if append:

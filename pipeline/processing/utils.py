@@ -4,7 +4,7 @@ import subprocess
 from multiprocessing import Pool
 from pathlib import Path
 from psycopg2 import connect
-from .config import azure_container, azure_sas
+from .config import azure_container, azure_sas, sas_data_url
 
 DATABASE = 'sids_data_pipeline'
 
@@ -26,6 +26,11 @@ def get_azure_url(blob_path):
 def download_file(blob_path, input_path):
     url = get_azure_url(blob_path)
     subprocess.run(['azcopy', 'copy', url, input_path],
+                   stdout=subprocess.DEVNULL)
+
+
+def upload_dir(input_path):
+    subprocess.run(['azcopy', 'copy', '--recursive=true', input_path, sas_data_url],
                    stdout=subprocess.DEVNULL)
 
 
