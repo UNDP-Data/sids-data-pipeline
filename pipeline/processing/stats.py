@@ -6,16 +6,12 @@ query_1 = """
     DROP TABLE IF EXISTS {table_out};
     CREATE TABLE {table_out} AS
     WITH x AS (
-        SELECT
-            a.fid,
-            ST_Clip(b.rast, a.geom) AS rast
+        SELECT a.fid, b.val
         FROM {table_in_v} AS a
         LEFT JOIN {table_in_r} as b
-        ON ST_Intersects(a.geom, b.rast)
+        ON ST_Intersects(a.geom, b.geom)
     )
-    SELECT
-        fid,
-        (ST_SummaryStatsAgg(rast, 1, true)).mean AS mean
+    SELECT fid, AVG(val) AS mean
     FROM x
     GROUP BY fid
     ORDER BY fid;
