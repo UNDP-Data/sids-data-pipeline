@@ -8,7 +8,7 @@ query_1 = """
     DROP TABLE IF EXISTS {table_out};
     CREATE TABLE {table_out} AS
     WITH x AS (
-        SELECT (ST_PixelAsPolygons(rast)).*
+        SELECT (ST_DumpAsPolygons(rast)).*
         FROM {table_in}
     )
     SELECT val, geom
