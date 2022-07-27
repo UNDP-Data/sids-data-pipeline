@@ -12,7 +12,7 @@ query_2 = """
 """
 
 
-def clean_input(row, *_):
+def clean_download(row, *_):
     row['input_path'].unlink(missing_ok=True)
 
 
@@ -26,12 +26,18 @@ def clean_tmp_vector(r_row, vector_data, *_):
         (cwd / f'../tmp/vectors/{tmp_file}').unlink(missing_ok=True)
 
 
+def clean_db_input(row, _, __, cur):
+    r_id = row['id'].lower()
+    cur.execute(SQL(query_1).format(
+        table_in1=Identifier(r_id),
+    ))
+
+
 def clean_db_raster(r_row, vector_data, _, cur):
     for v_row in vector_data:
         v_id = v_row['id']
         r_id = r_row['id'].lower()
         cur.execute(SQL(query_1).format(
-            table_in1=Identifier(r_id),
             table_in2=Identifier(f'{v_id}_{r_id}'),
         ))
 

@@ -1,4 +1,4 @@
-from .cleanup import (clean_input, clean_tmp_vector,
+from .cleanup import (clean_download, clean_db_input, clean_tmp_vector,
                       clean_db_vector, clean_db_raster, clean_all)
 from .data import get_data
 from .download import download_data
@@ -10,9 +10,9 @@ from .vector import stats_to_vector
 
 logger = logging.getLogger(__name__)
 
-vector_funcs = [download_data, import_vector, clean_input]
-raster_funcs = [download_data, import_raster, clean_input,
-                generate_stats, stats_to_vector, clean_db_raster,
+vector_funcs = [download_data, import_vector, clean_download]
+raster_funcs = [download_data, import_raster, clean_download,
+                generate_stats, clean_db_input, stats_to_vector, clean_db_raster,
                 export_tiles, clean_tmp_vector]
 vector_cleanup = [clean_db_vector]
 
