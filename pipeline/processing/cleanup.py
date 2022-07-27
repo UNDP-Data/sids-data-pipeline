@@ -46,3 +46,4 @@ def clean_db_vector(row, _, __, cur):
 def clean_all(*_):
     shutil.rmtree(cwd / '../inputs', ignore_errors=True)
     shutil.rmtree(cwd / '../tmp', ignore_errors=True)
+    shutil.rmtree(cwd / '../outputs', ignore_errors=True)
