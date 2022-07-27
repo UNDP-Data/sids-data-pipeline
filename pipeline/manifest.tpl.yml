@@ -15,8 +15,8 @@ properties:
         image: undpgeohub.azurecr.io/sids-data-pipeline
         resources:
           requests:
-            cpu: 4
-            memoryInGB: 8
+            cpu: 1
+            memoryInGB: 2
   imageRegistryCredentials:
     - server: undpgeohub.azurecr.io
       username: $AZURE_REGISTRY_USERNAME
