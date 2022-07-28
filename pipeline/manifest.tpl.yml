@@ -1,6 +1,6 @@
 apiVersion: "2021-07-01"
 name: sids-data-pipeline
-location: westeurope
+location: northeurope
 properties:
   osType: Linux
   restartPolicy: Never
@@ -15,8 +15,8 @@ properties:
         image: undpgeohub.azurecr.io/sids-data-pipeline
         resources:
           requests:
-            cpu: 2
-            memoryInGB: 4
+            cpu: 1
+            memoryInGB: 8
   imageRegistryCredentials:
     - server: undpgeohub.azurecr.io
       username: $AZURE_REGISTRY_USERNAME
