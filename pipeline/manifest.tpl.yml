@@ -16,7 +16,7 @@ properties:
         resources:
           requests:
             cpu: 1
-            memoryInGB: 8
+            memoryInGB: 16
   imageRegistryCredentials:
     - server: undpgeohub.azurecr.io
       username: $AZURE_REGISTRY_USERNAME
