@@ -10,16 +10,19 @@ query_1 = """
 
 def clean_download(row, *_):
     row['input_path'].unlink(missing_ok=True)
+    logger.info(f'removed download {row['input_path']}')
 
 
 def clean_tmp_raster(row, *_):
     row['tmp_path'].unlink(missing_ok=True)
+    logger.info(f'removed temp raster {row['tmp_path']}')
 
 
 def clean_tmp_vector(r_row, vector_data, *_):
     for v_row in vector_data:
         tmp_file = f"{v_row['id']}_{r_row['id']}.geojsonl"
         (cwd / f'../tmp/vectors/{tmp_file}').unlink(missing_ok=True)
+        logger.info(f'removed temp vector {tmp_file}')
 
 
 def clean_db_input(row, _, __, cur):
@@ -27,6 +30,7 @@ def clean_db_input(row, _, __, cur):
     cur.execute(SQL(query_1).format(
         table_in=Identifier(r_id),
     ))
+    logger.info(f'removed db input {r_id}')
 
 
 def clean_db_raster(r_row, vector_data, _, cur):
@@ -36,6 +40,7 @@ def clean_db_raster(r_row, vector_data, _, cur):
         cur.execute(SQL(query_1).format(
             table_in=Identifier(f'{v_id}_{r_id}'),
         ))
+        logger.info(f'removed db raster {v_id}')
 
 
 def clean_db_vector(row, _, __, cur):
@@ -43,9 +48,11 @@ def clean_db_vector(row, _, __, cur):
     cur.execute(SQL(query_1).format(
         table_in=Identifier(v_id),
     ))
+    logger.info(f'removed db vector {v_id}')
 
 
 def clean_all(*_):
     shutil.rmtree(cwd / '../inputs', ignore_errors=True)
     shutil.rmtree(cwd / '../tmp', ignore_errors=True)
     shutil.rmtree(cwd / '../outputs', ignore_errors=True)
+    logger.info(f'removed all')
