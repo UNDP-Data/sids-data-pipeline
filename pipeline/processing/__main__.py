@@ -17,7 +17,7 @@ raster_funcs = [download_data, import_raster, clean_download,
 vector_cleanup = [clean_db_vector]
 
 if __name__ == '__main__':
-    logger.info('starting')
+    logger.info('starting processing pipeline')
     vector_data, raster_data, raster_vector_data = get_data()
     multiprocess(vector_funcs, vector_data)
     multiprocess(raster_funcs, raster_data, vector_data, raster_vector_data)
